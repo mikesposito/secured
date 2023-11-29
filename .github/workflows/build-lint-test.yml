@@ -1,0 +1,39 @@
+name: Build, Lint and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build
+      run: cargo build --workspace --verbose
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Lint
+      run: |
+        rustfmt ./**/*.rs
+        if ! git diff --exit-code; then
+          echo "Please run 'rustfmt --check ./**/*.rs' to lint your code."
+          exit 1
+        fi
+  
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Text
+      run: cargo test --workspace

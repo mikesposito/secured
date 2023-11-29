@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "secured"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "secured-enclave",

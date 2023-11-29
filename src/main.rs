@@ -39,9 +39,7 @@ fn main() {
 }
 
 fn encrypt_file(password: &String, filename: &String) {
-  println!("Encrypting file: {}", filename);
   let encryption_key = EncryptionKey::new(password.as_bytes(), 900_000);
-  println!("encryption_key: {:?}", encryption_key.pubk);
   let enclave = Enclave::from_plain_bytes(
     encryption_key.salt,
     &encryption_key.pubk,
@@ -49,7 +47,6 @@ fn encrypt_file(password: &String, filename: &String) {
   )
   .unwrap();
   let encrypted_bytes: Vec<u8> = enclave.into();
-  println!("encrypted_bytes: {:?}", encrypted_bytes);
 
   File::create(format!("{}.secured", filename))
     .expect("Unable to create file")

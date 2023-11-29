@@ -18,6 +18,9 @@ path = "enclave"
 version = "^4.0.0"
 features = ["derive"]
 
+[dependencies.text_io]
+version = "^0.1.12"
+
 [[bin]]
 name = "secured"
 path = "src/main.rs"

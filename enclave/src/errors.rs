@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter, Result};
 
+#[derive(Debug)]
 pub enum EnclaveError {
   Serialization(String),
   Deserialization(String),

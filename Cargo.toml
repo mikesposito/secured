@@ -26,8 +26,8 @@ version = "0.1.0"
 version = "^4.0.0"
 features = ["derive"]
 
-[dependencies.text_io]
-version = "^0.1.12"
+[dependencies.rpassword]
+version = "^7.3.1"
 
 [[bin]]
 name = "secured"

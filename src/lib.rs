@@ -27,14 +27,14 @@
 /// use secured::enclave::{ChaCha20Poly1305Cipher, EncryptionKey, Enclave, CipherKey};
 ///
 /// fn main() {
-///     // Key generation
-///     let key = EncryptionKey::new(some_password, num_rounds);
+///   // Key generation
+///   let key = EncryptionKey::new(b"my password", 1_000); // 1k rounds are too low for production use
 ///
-///     // Encryption
-///     let encrypted_data = ChaCha20Poly1305Cipher::encrypt(&key, data_to_encrypt);
-///
-///     // Using Enclave for data encapsulation
-///     let enclave = Enclave::from_plain_bytes(metadata, &key, data_to_encrypt);
+///   // Use the Enclave to encrypt data
+///   let enclave = Enclave::from_plain_bytes("some metadata", &key.pubk, b"some bytes to encrypt".to_vec()).unwrap();
+///   
+///   // Decrypt the enclave
+///   let recovered_bytes = enclave.decrypt(&key.pubk);
 /// }
 /// ```
 pub use enclave;

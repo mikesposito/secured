@@ -4,23 +4,39 @@ use chacha20poly1305::{
 };
 use rand_core::{OsRng, RngCore};
 
+/// Type alias for a 32-byte cipher key.
 pub type CipherKey = [u8; 32];
+
+/// Type alias for a 24-byte cipher nonce.
 pub type CipherNonce = [u8; 24];
+
+/// Type alias for encrypted data represented as a vector of bytes.
 pub type EncryptedBytes = Vec<u8>;
 
+/// `ChaCha20Poly1305Cipher` provides functionality for encryption and decryption using the
+/// ChaCha20Poly1305 algorithm.
 pub struct ChaCha20Poly1305Cipher;
 
 impl ChaCha20Poly1305Cipher {
-  /// Generate a new 32 bytes long cipher key
-  /// for ChaCha20Poly1305
+  /// Generates a new 32-byte cipher key for ChaCha20Poly1305 encryption.
+  ///
+  /// # Returns
+  /// A randomly generated 32-byte `CipherKey`.
   pub fn new_key() -> CipherKey {
     let mut key = [0; 32];
     OsRng.fill_bytes(&mut key);
     key
   }
 
-  /// Encrypt data with ChaCha20Poly1305, using the passed key
-  /// and a randomly generated 24 bytes long nonce.
+  /// Encrypts data using ChaCha20Poly1305 with a specified key and a randomly generated nonce.
+  ///
+  /// # Arguments
+  /// * `key` - A 32-byte array used as the encryption key.
+  /// * `data` - The data to be encrypted as a byte slice.
+  ///
+  /// # Returns
+  /// A `Result` containing either the encrypted data and the nonce used for encryption,
+  /// or an error message if encryption fails.
   pub fn encrypt(key: &[u8; 32], data: &[u8]) -> Result<(EncryptedBytes, CipherNonce), String> {
     let mut nonce = [0; 24];
     OsRng.fill_bytes(&mut nonce);
@@ -28,7 +44,16 @@ impl ChaCha20Poly1305Cipher {
     Ok((chacha20poly1305_encrypt((key, &nonce), data)?, nonce))
   }
 
-  /// Decrypt data with ChaCha20Poly1305, using the passed key and nonce.
+  /// Decrypts data using ChaCha20Poly1305 with a specified key and nonce.
+  ///
+  /// # Arguments
+  /// * `key` - A 32-byte array used as the decryption key.
+  /// * `nonce` - A 24-byte array representing the nonce used during encryption.
+  /// * `data` - The encrypted data as a byte slice.
+  ///
+  /// # Returns
+  /// A `Result` containing either the decrypted plaintext as a vector of bytes,
+  /// or an error message if decryption fails.
   pub fn decrypt(
     key: &CipherKey,
     nonce: &CipherNonce,
@@ -38,6 +63,15 @@ impl ChaCha20Poly1305Cipher {
   }
 }
 
+/// Encrypts data using the XChaCha20Poly1305 algorithm.
+///
+/// # Arguments
+/// * `(key, nonce)` - A tuple containing a 32-byte encryption key and a 24-byte nonce.
+/// * `data` - The data to be encrypted as a byte slice.
+///
+/// # Returns
+/// A `Result` containing either the encrypted data as a vector of bytes,
+/// or an error message if encryption fails.
 fn chacha20poly1305_encrypt(
   (key, nonce): (&[u8; 32], &[u8; 24]),
   data: &[u8],
@@ -53,6 +87,15 @@ fn chacha20poly1305_encrypt(
   }
 }
 
+/// Decrypts data using the XChaCha20Poly1305 algorithm.
+///
+/// # Arguments
+/// * `(key, nonce)` - A tuple containing a 32-byte decryption key and a 24-byte nonce.
+/// * `data` - The encrypted data as a byte slice.
+///
+/// # Returns
+/// A `Result` containing either the decrypted plaintext as a vector of bytes,
+/// or an error message if decryption fails.
 fn chacha20poly1305_decrypt(
   (key, nonce): (&[u8; 32], &[u8; 24]),
   data: &[u8],

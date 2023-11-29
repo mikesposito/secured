@@ -2,6 +2,9 @@
 
 Secured is a versatile Rust package that provides robust encryption and decryption capabilities. It can be seamlessly integrated as a library in other Rust applications or used as a standalone command-line interface (CLI) tool.
 
+> [!WARNING]
+> This crate is under development and APIs are rapidly changing (including this README!). Make sure to lock to a specific crate version to avoid updates. 
+
 ## Features
 
 - **Encryption and Decryption**: Easily encrypt and decrypt files with password, safely.
@@ -33,19 +36,34 @@ Secured is straightforward to use from the command line. Here are the basic comm
    ```sh
    secured encrypt <FILE> [PASSWORD]
    ```
-   Encrypts the specified `<file>`. An optional `<password>` can be provided for extra security.
+   Encrypts the specified `<FILE>`. An optional `[PASSWORD]` can be passed directly to the command.
 
 2. **Decryption**
    ```sh
    secured decrypt <FILE> [PASSWORD]
    ```
-   Decrypts the specified `<file>`. If a `<password>` was used during encryption, the same must be provided for decryption.
+   Decrypts the specified `<FILE>`. An optional `[PASSWORD]` can be passed directly to the command. Obviously, the password must be the same used during encryption.
 
 ### As a Library
 
 To use Secured as a library in your Rust application, simply import the package and utilize its encryption and decryption functions as per your requirements.
 
-See [package documentation](https://docs.rs/secured/0.1.0/) for more information
+```rust
+use secured::enclave::{ChaCha20Poly1305Cipher, EncryptionKey, Enclave, CipherKey};
+
+fn main() {
+   // Key generation
+   let key = EncryptionKey::new(some_password, 900_000); // 900K rounds
+
+   // Using Enclave for data encapsulation
+   let enclave = Enclave::from_plain_bytes(&key.salt, &key.pubk, "Some bytes to encrypt".as_bytes());
+
+   // Decrypt Enclave 
+   let decrypted_bytes = enclave.decrypt(&key.pubk).unwrap();
+}
+```
+
+See [package documentation](https://docs.rs/secured/0.1.1/) for more information
 
 ## Contributing
 

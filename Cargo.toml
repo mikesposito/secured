@@ -1,9 +1,21 @@
 [package]
 name = "secured"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 authors = ["mikesposito"]
 license = "MIT"
+description = "A lightweight, easy-to-use Rust package for file encryption and decryption, suitable for both CLI and library integration in Rust applications."
+repository = "https://github.com/mikesposito/secured/"
+keywords = [
+  "crypto",
+  "encryptor",
+  "vault",
+  "encrypt",
+  "decrypt",
+  "cipher",
+  "password",
+  "passworder",
+]
 
 [workspace]
 members = ["enclave"]

@@ -9,7 +9,15 @@ Secured is a versatile Rust package that provides robust encryption and decrypti
 
 ## Installation
 
-To use **secured** as a CLI tool or integrate it into your Rust project, ensure you have Rust installed, then add Secured to your dependencies:
+To use **secured** as a CLI tool or integrate it into your Rust project, ensure you have Rust installed, then:
+
+### As a CLI tool
+
+```sh
+cargo install secured
+```
+
+### As a Library
 
 ```sh
 cargo add secured
@@ -63,7 +71,3 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 ## License
 
 Secured is distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-Feel free to modify and expand this README as per your project's evolving needs!

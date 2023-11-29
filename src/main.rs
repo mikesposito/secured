@@ -1,7 +1,7 @@
+use clap::{Parser, Subcommand};
 use std::fs::{metadata, File};
 use std::io::{Read, Write};
 use text_io::read;
-use clap::{Parser, Subcommand};
 
 use enclave::{Enclave, EncryptionKey};
 

@@ -7,7 +7,7 @@ pub use encryption_key::EncryptionKey;
 pub use errors::EnclaveError;
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.
-/// 
+///
 /// Metadata is unencrypted and can be used to store information about the data,
 /// while the actual data is securely encrypted.
 ///
@@ -17,7 +17,7 @@ pub use errors::EnclaveError;
 pub struct Enclave<T> {
   /// Metadata associated with the encrypted data.
   pub metadata: T,
-  
+
   /// The encrypted data.
   encrypted_bytes: Box<[u8]>,
 

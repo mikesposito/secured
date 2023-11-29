@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
+use rpassword::prompt_password;
 use std::fs::{metadata, File};
 use std::io::{Read, Write};
-use text_io::read;
 
 use enclave::{Enclave, EncryptionKey};
 
@@ -122,9 +122,6 @@ fn get_file_as_byte_vec(filename: &String) -> Vec<u8> {
 fn get_password_or_prompt(password: Option<String>) -> String {
   match password {
     Some(password) => password,
-    None => {
-      println!("Enter password: ");
-      read!("{}\n")
-    }
+    None => prompt_password("Enter password: ").expect("Unable to read password"),
   }
 }

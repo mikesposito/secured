@@ -1,0 +1,23 @@
+[package]
+name = "secured"
+version = "0.0.1"
+edition = "2021"
+authors = ["mikesposito"]
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+members = ["enclave"]
+
+[dependencies.enclave]
+package = "secured-enclave"
+path = "enclave"
+
+[dependencies.clap]
+version = "^4.0.0"
+features = ["derive"]
+
+[[bin]]
+name = "secured"
+path = "src/main.rs"

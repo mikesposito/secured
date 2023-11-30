@@ -68,6 +68,16 @@ pub fn chacha20_rounds(out: &mut [u32; 16], add: Option<[u32; 16]>) {
   }
 }
 
+pub fn seek_keystream(state: &[u32; 16], n: u64) -> [u32; 16] {
+  let mut state = state.clone();
+  let mut keystream = state;
+
+  safe_2words_counter_increment_n(&mut state[12..14], n);
+  chacha20_rounds(&mut keystream, Some(state));
+
+  keystream
+}
+
 /// Safely increments the 2-word block counter of the ChaCha20 state.
 ///
 /// This function increments the lower 32 bits of the counter and, if there is an overflow,
@@ -82,6 +92,13 @@ pub fn safe_2words_counter_increment(counter: &mut [u32]) {
     let (higher_word_increment, higher_overflow) = counter[1].overflowing_add(1);
     assert!(!higher_overflow, "ChaCha20 block counter overflow");
     counter[1] = higher_word_increment;
+  }
+}
+
+pub fn safe_2words_counter_increment_n(counter: &mut [u32], n: u64) {
+  counter[0] = counter[0].wrapping_add(n as u32);
+  if counter[0] < n as u32 {
+    counter[1] = counter[1].wrapping_add(1);
   }
 }
 

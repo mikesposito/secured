@@ -2,11 +2,15 @@
 //! It provides the `ChaChaStream` struct for cipher operations,
 //! supporting key and nonce initialization, block processing, and state management.
 
+use std::sync::Arc;
+
 use crate::{Bytes, Slice};
 
+use rayon::prelude::*;
+
 use super::core::{
-  chacha20_rounds, safe_2words_counter_increment, to_u32_slice, u32_slice_to_16words_chunks,
-  CONSTANTS, STATE_WORDS, u32_to_u8_vec,
+  chacha20_rounds, safe_2words_counter_increment, seek_keystream, to_u32_slice, u32_to_u8_vec,
+  CONSTANTS, STATE_WORDS,
 };
 
 /// A ChaCha20 cipher stream.
@@ -110,24 +114,26 @@ impl ChaChaStream {
   /// # Returns
   /// A byte vector containing the processed data.
   pub fn process(&mut self, bytes_in: &Slice) -> Bytes {
-    // Convert the input to a vector of 32-bit words
-    let chunks = u32_slice_to_16words_chunks(&to_u32_slice(bytes_in));
     // Prepare the output vector of 32-bit words from the input
     let mut out: Vec<u32> = to_u32_slice(bytes_in);
+    // Wrap the state in an Arc to allow for parallel processing
+    let arc_state = Arc::new(self.state);
 
-    for i in 0..chunks.len() {
-      // Each block is 64 bytes long, so we need to add a new block every 64 bytes
-      self.add_block();
+    // Process each 64-byte block in parallel
+    out.par_chunks_mut(64).enumerate().for_each(|(i, chunk)| {
+      let chunk_keystream = seek_keystream(&arc_state, i as u64);
 
-      for k in i * 64..(i * 64) + chunks[i].len() {
-        if k >= out.len() {
-          // we reached the end of the data
+      for (k, out_elem) in chunk.iter_mut().enumerate() {
+        if k >= chunk_keystream.len() {
+          // If the chunk is smaller than 64 bytes, the keystream will be shorter than 64 bytes.
           break;
         }
+
         // XOR the output with the keystream
-        out[k] ^= self.keystream[k - i * 64];
+        *out_elem ^= chunk_keystream[k];
       }
-    }
+    });
+
     // Clear the keystream
     self.clear_stream();
 
@@ -203,7 +209,7 @@ mod tests {
 
     assert_eq!(decrypted_data, data);
   }
-  
+
   #[test]
   fn it_can_reverse_encryption_for_data_smaller_than_a_chunk() {
     let mut chacha20 = ChaChaStream::new([1u8; 32], [2u8; 8]);

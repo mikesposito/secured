@@ -10,3 +10,7 @@ description = "Pure Rust implementation of the ChaCha cipher family"
 package = "secured-cipher-key"
 path = "./key"
 version = "0.1.0"
+
+[dependencies.rayon]
+package = "rayon"
+version = "~1.8.0"

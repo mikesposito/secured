@@ -9,7 +9,7 @@ repository = "https://github.com/mikesposito/secured/"
 keywords = ["crypto", "encrypt", "decrypt", "cipher", "password"]
 
 [workspace]
-members = ["enclave", "cipher", "cipher/key"]
+members = ["enclave", "cipher", "cipher/key", "benches"]
 
 [dependencies.enclave]
 package = "secured-enclave"

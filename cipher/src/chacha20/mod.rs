@@ -6,7 +6,7 @@ pub mod core;
 pub mod stream;
 
 use crate::{Bytes, Cipher, Slice};
-use stream::ChaChaStream;
+pub use stream::ChaChaStream;
 
 /// Represents the ChaCha20 encryption/decryption cipher.
 ///

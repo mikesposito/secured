@@ -3,11 +3,13 @@
 Secured is a versatile Rust package that provides robust encryption and decryption capabilities. It can be seamlessly integrated as a library in other Rust applications or used as a standalone command-line interface (CLI) tool.
 
 > [!WARNING]
-> This crate is under development and APIs are rapidly changing (including this README!). Make sure to lock to a specific crate version to avoid updates. 
+> This crate is under development and APIs are rapidly changing (including this README!). Make sure to lock to a specific crate version to avoid updates.
 
 ## Features
 
 - **Encryption and Decryption**: Easily encrypt and decrypt files with password, safely.
+  - A `ChaCha20` cipher is used, with a 32-bytes long encryption key, a 2-words `IV`, and a 2-words `counter`.
+    The cipher encrypts bytes dividing them in 64-bytes chunks, and processing each chunk in parallel.
 - **Cli & Library**: Use as a standalone CLI tool or integrate as a library in your Rust applications.
 
 ## Installation
@@ -33,9 +35,11 @@ cargo add secured
 Secured is straightforward to use from the command line. Here are the basic commands:
 
 1. **Encryption**
+
    ```sh
    secured encrypt <FILE> [PASSWORD]
    ```
+
    Encrypts the specified `<FILE>`. An optional `[PASSWORD]` can be passed directly to the command.
 
 2. **Decryption**
@@ -49,17 +53,25 @@ Secured is straightforward to use from the command line. Here are the basic comm
 To use Secured as a library in your Rust application, simply import the package and utilize its encryption and decryption functions as per your requirements.
 
 ```rust
-use secured::enclave::{ChaCha20Poly1305Cipher, EncryptionKey, Enclave, CipherKey};
+use secured::enclave::Enclave;
+use secured::cipher::Key;
 
 fn main() {
-   // Key generation
-   let key = EncryptionKey::new(some_password, 900_000); // 900K rounds
+   // Key generation (32bytes for the key, 16 bytes for salt)
+   let key = Key::<32, 16>::new(b"my password", 900_000); // 900K rounds
 
    // Using Enclave for data encapsulation
-   let enclave = Enclave::from_plain_bytes(&key.salt, &key.pubk, "Some bytes to encrypt".as_bytes());
+   let enclave =
+      Enclave::from_plain_bytes("Some metadata", key.pubk, b"Some bytes to encrypt".to_vec())
+         .unwrap();
 
-   // Decrypt Enclave 
-   let decrypted_bytes = enclave.decrypt(&key.pubk).unwrap();
+   // Get encrypted bytes (ciphertext)
+   println!("Encrypted bytes: {:?}", enclave.encrypted_bytes);
+
+   // Decrypt Enclave
+   let decrypted_bytes = enclave.decrypt(key.pubk).unwrap();
+
+   assert_eq!(decrypted_bytes, b"Some bytes to encrypt");
 }
 ```
 

@@ -6,20 +6,19 @@ authors = ["mikesposito"]
 license = "MIT"
 description = "A lightweight, easy-to-use Rust package for file encryption and decryption, suitable for both CLI and library integration in Rust applications."
 repository = "https://github.com/mikesposito/secured/"
-keywords = [
-  "crypto",
-  "encrypt",
-  "decrypt",
-  "cipher",
-  "password",
-]
+keywords = ["crypto", "encrypt", "decrypt", "cipher", "password"]
 
 [workspace]
-members = ["enclave"]
+members = ["enclave", "cipher", "cipher/key"]
 
 [dependencies.enclave]
 package = "secured-enclave"
 path = "enclave"
+version = "0.1.0"
+
+[dependencies.cipher]
+package = "secured-cipher"
+path = "cipher"
 version = "0.1.0"
 
 [dependencies.clap]

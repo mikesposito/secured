@@ -1,10 +1,7 @@
-pub mod cipher;
-pub mod encryption_key;
 pub mod errors;
 
-pub use cipher::{ChaCha20Poly1305Cipher, CipherKey, CipherNonce};
-pub use encryption_key::EncryptionKey;
 pub use errors::EnclaveError;
+use secured_cipher::{chacha20::ChaCha20, random_bytes, Cipher};
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.
 ///
@@ -21,8 +18,8 @@ pub struct Enclave<T> {
   /// The encrypted data.
   encrypted_bytes: Box<[u8]>,
 
-  /// The nonce used in the encryption process, 24 bytes long.
-  nonce: [u8; 24],
+  /// The nonce used in the encryption process, 8 bytes long (ChaCha20).
+  nonce: [u8; 8],
 }
 
 impl<T> Enclave<T> {
@@ -37,10 +34,13 @@ impl<T> Enclave<T> {
   /// A `Result` containing the newly created `Enclave` instance, or an error string if encryption fails.
   pub fn from_plain_bytes(
     metadata: T,
-    key: &CipherKey,
+    key: [u8; 32],
     plain_bytes: Vec<u8>,
   ) -> Result<Self, String> {
-    let (encrypted_bytes, nonce) = ChaCha20Poly1305Cipher::encrypt(key, &plain_bytes)?;
+    let nonce = random_bytes::<8>();
+    let mut cipher = ChaCha20::new(key, nonce);
+
+    let encrypted_bytes = cipher.encrypt(&plain_bytes);
 
     Ok(Enclave {
       metadata,
@@ -56,8 +56,10 @@ impl<T> Enclave<T> {
   ///
   /// # Returns
   /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
-  pub fn decrypt(&self, key: &CipherKey) -> Result<Vec<u8>, String> {
-    ChaCha20Poly1305Cipher::decrypt(key, &self.nonce, &self.encrypted_bytes)
+  pub fn decrypt(&self, key: [u8; 32]) -> Result<Vec<u8>, String> {
+    let mut cipher = ChaCha20::new(key, self.nonce);
+
+    Ok(cipher.decrypt(&self.encrypted_bytes))
   }
 }
 
@@ -137,16 +139,17 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
+  use secured_cipher::Key;
 
   mod from_plain_bytes {
     use super::*;
 
     #[test]
     fn it_should_create_enclave() {
-      let key = ChaCha20Poly1305Cipher::new_key();
+      let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
 
-      let safe = Enclave::from_plain_bytes("metadata", &key, bytes);
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes);
 
       assert!(safe.is_ok());
       assert_eq!(safe.unwrap().metadata, "metadata");
@@ -158,11 +161,11 @@ mod tests {
 
     #[test]
     fn it_should_decrypt_enclave() {
-      let key = ChaCha20Poly1305Cipher::new_key();
+      let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", &key, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
 
-      let decrypted_bytes = safe.decrypt(&key);
+      let decrypted_bytes = safe.decrypt(key.pubk);
 
       assert!(decrypted_bytes.is_ok());
       assert_eq!(decrypted_bytes.unwrap(), bytes);
@@ -170,13 +173,14 @@ mod tests {
 
     #[test]
     fn it_should_fail_with_wrong_key() {
-      let key = ChaCha20Poly1305Cipher::new_key();
+      let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", &key, bytes).unwrap();
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
 
-      let decrypted_bytes = safe.decrypt(&[0_u8; 32]);
+      let decrypted_bytes = safe.decrypt(wrong_key.pubk).unwrap();
 
-      assert!(decrypted_bytes.is_err());
+      assert_ne!(decrypted_bytes, bytes);
     }
   }
 }

@@ -1,0 +1,23 @@
+[package]
+name = "benches"
+version = "0.0.0"
+authors = ["mikesposito"]
+license = "MIT"
+description = "Criterion benchmarks of the secured crates"
+edition = "2018"
+publish = false
+
+[dev-dependencies]
+criterion = "0.5"
+secured-enclave = { path = "../enclave/" }
+secured-cipher = { path = "../cipher/" }
+
+[[bench]]
+name = "enclave"
+path = "src/enclave.rs"
+harness = false
+
+[[bench]]
+name = "chacha20"
+path = "src/chacha20.rs"
+harness = false

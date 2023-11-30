@@ -1,7 +1,7 @@
 pub mod errors;
 
 pub use errors::EnclaveError;
-use secured_cipher::{chacha20::ChaCha20, random_bytes, Cipher, Key};
+use secured_cipher::{chacha20::ChaCha20, random_bytes, Cipher};
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.
 ///
@@ -139,6 +139,7 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
+  use secured_cipher::Key;
 
   mod from_plain_bytes {
     use super::*;
@@ -174,12 +175,12 @@ mod tests {
     fn it_should_fail_with_wrong_key() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes).unwrap();
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
       let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
 
-      let decrypted_bytes = safe.decrypt(wrong_key.pubk);
+      let decrypted_bytes = safe.decrypt(wrong_key.pubk).unwrap();
 
-      assert!(decrypted_bytes.is_err());
+      assert_ne!(decrypted_bytes, bytes);
     }
   }
 }

@@ -100,7 +100,7 @@ pub fn to_u32_slice(bytes: &[u8]) -> Vec<u32> {
     .chunks(4)
     .map(|chunk| {
       let mut array = [0u8; 4];
-      for (dest_elem, src_elem) in array.iter_mut().zip(chunk.iter()) {
+      for (dest_elem, src_elem) in array.iter_mut().zip(chunk) {
         *dest_elem = *src_elem;
       }
       u32::from_le_bytes(array)
@@ -118,15 +118,28 @@ pub fn to_u32_slice(bytes: &[u8]) -> Vec<u32> {
 ///
 /// # Returns
 /// A vector of 16-word arrays.
-pub fn u32_slice_to_16words_chunks(bytes: &[u32]) -> Vec<[u32; 16]> {
-  bytes
-    .chunks(16)
-    .map(|chunk| {
-      let mut out = [0u32; 16];
-      for (dest_elem, src_elem) in out.iter_mut().zip(chunk.iter()) {
-        *dest_elem = *src_elem;
-      }
-      out
-    })
+pub fn u32_slice_to_16words_chunks(bytes: &[u32]) -> Vec<Vec<u32>> {
+  bytes.chunks(16).map(|chunk| chunk.to_vec()).collect()
+}
+
+/// Converts a vector of 32-bit unsigned integers into a vector of bytes.
+///
+/// This function is useful for situations where you have a collection of 32-bit integers
+/// and need to represent them as a sequence of bytes, such as when preparing data for
+/// cryptographic algorithms or for certain IO operations.
+///
+/// Each 32-bit integer is split into four bytes in little-endian order. The resulting byte
+/// stream concatenates these byte sequences from each integer.
+///
+/// # Arguments
+/// * `input` - A vector of 32-bit unsigned integers.
+///
+/// # Returns
+/// A vector of bytes, where each 32-bit integer from the input is represented
+/// as four consecutive bytes in the output vector.
+pub fn u32_to_u8_vec(input: &[u32]) -> Vec<u8> {
+  input
+    .into_iter()
+    .flat_map(|value| value.to_le_bytes().to_vec())
     .collect()
 }

@@ -6,7 +6,7 @@ use crate::{Bytes, Slice};
 
 use super::core::{
   chacha20_rounds, safe_2words_counter_increment, to_u32_slice, u32_slice_to_16words_chunks,
-  CONSTANTS, STATE_WORDS,
+  CONSTANTS, STATE_WORDS, u32_to_u8_vec,
 };
 
 /// A ChaCha20 cipher stream.
@@ -132,11 +132,11 @@ impl ChaChaStream {
     self.clear_stream();
 
     // Convert the output to a byte vector
-    out
-      .iter()
-      .map(|word| word.to_le_bytes().to_vec())
-      .flatten()
-      .collect()
+    let mut bytes_out = u32_to_u8_vec(&out);
+    // Truncate the output to the length of the input,
+    // as the output may contain extra bytes if the input length is not a multiple of 64
+    bytes_out.truncate(bytes_in.len());
+    bytes_out
   }
 
   fn clear_stream(&mut self) {
@@ -197,6 +197,17 @@ mod tests {
   fn it_can_reverse_encryption() {
     let mut chacha20 = ChaChaStream::new([1u8; 32], [2u8; 8]);
     let data = [0u8; 64];
+
+    let encrypted_data = chacha20.process(&data);
+    let decrypted_data = chacha20.process(&encrypted_data);
+
+    assert_eq!(decrypted_data, data);
+  }
+  
+  #[test]
+  fn it_can_reverse_encryption_for_data_smaller_than_a_chunk() {
+    let mut chacha20 = ChaChaStream::new([1u8; 32], [2u8; 8]);
+    let data = [0u8; 1];
 
     let encrypted_data = chacha20.process(&data);
     let decrypted_data = chacha20.process(&encrypted_data);

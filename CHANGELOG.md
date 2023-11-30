@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.2.0]
+
+### Added
+
+- Added local implementation of the `ChaCha20` cipher, shipped with `secure-cipher` crate ([#9](https://github.com/mikesposito/secured/pull/9))
+
+### Removed
+
+- Removed `Cipher`, `ChaCha20Poly1305` and `EncryptionKey` from `secure-enclave` crate ([#9](https://github.com/mikesposito/secured/pull/9))
+  - The `secure-cipher` crate should be used now.
 
 ## [0.1.2]
 
@@ -26,7 +36,8 @@ All notable changes to this project will be documented in this file.
 
 - Initial release
 
-[Unreleased]: https://github.com/mikesposito/secured/secured@0.1.2...HEAD
+[Unreleased]: https://github.com/mikesposito/secured/secured@0.2.0...HEAD
+[0.2.0]: https://github.com/mikesposito/secured/compare/secured@0.1.2...secured@0.2.0
 [0.1.2]: https://github.com/mikesposito/secured/compare/secured@0.1.1...secured@0.1.2
 [0.1.1]: https://github.com/mikesposito/secured/compare/secured@0.1.0...secured@0.1.1
 [0.1.0]: https://github.com/mikesposito/secured/releases/tag/secured@0.1.0

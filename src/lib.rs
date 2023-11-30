@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 
+pub use cipher;
 /// `secured` - A Rust-based Cryptographic Library
 ///
-/// This library focuses on providing robust and secure symmetric encryption functionalities, 
-/// primarily utilizing the ChaCha20 and ChaCha20Poly1305 algorithms. It offers a comprehensive suite of tools 
-/// for key generation, encryption, decryption, and secure data encapsulation, making it suitable 
+/// This library focuses on providing robust and secure symmetric encryption functionalities,
+/// primarily utilizing the ChaCha20 and ChaCha20Poly1305 algorithms. It offers a comprehensive suite of tools
+/// for key generation, encryption, decryption, and secure data encapsulation, making it suitable
 /// for a wide range of cryptographic needs.
 ///
 /// ## Features
@@ -46,8 +47,7 @@
 ///     let recovered_bytes = enclave.decrypt(key.pubk);
 /// }
 /// ```
-/// 
+///
 /// This basic example demonstrates key generation, data encryption, and decryption using the `Enclave`.
 /// For more detailed usage and advanced features, refer to the module documentation.
 pub use enclave;
-pub use cipher;

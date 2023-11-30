@@ -3,7 +3,7 @@ use rpassword::prompt_password;
 use std::fs::{metadata, File};
 use std::io::{Read, Write};
 
-use enclave::{Enclave};
+use enclave::Enclave;
 
 use cipher::Key;
 

@@ -1,18 +1,18 @@
 //! # Secured-Cipher Library
 //!
-//! This library, `secured-cipher`, provides an implementation of the ChaCha20 encryption algorithm, 
+//! This library, `secured-cipher`, provides an implementation of the ChaCha20 encryption algorithm,
 //! along with a common cryptographic interface defined by the `Cipher` trait.
 //! The library is structured to offer both low-level and high-level cryptographic functionalities.
 //!
 //! ## Overview
 //!
-//! - `ChaCha20`: A struct that provides a high-level interface for the ChaCha20 stream cipher algorithm. 
+//! - `ChaCha20`: A struct that provides a high-level interface for the ChaCha20 stream cipher algorithm.
 //!   It offers methods for encryption and decryption operations, simplifying the use of the underlying `ChaChaStream`.
 //! - `ChaChaStream`: A struct that handles the core state and operations of the ChaCha20 cipher.
 //!   It is used internally by `ChaCha20` but can also be used directly for lower-level control.
-//! - `Cipher`: A trait that defines a standard interface for cryptographic operations, 
+//! - `Cipher`: A trait that defines a standard interface for cryptographic operations,
 //!   specifically focusing on encryption and decryption methods.
-//! - Type aliases (`Slice`, `Key`, `Nonce`, `Bytes`): These simplify the usage of common cryptographic data types 
+//! - Type aliases (`Slice`, `Key`, `Nonce`, `Bytes`): These simplify the usage of common cryptographic data types
 //!   such as keys, nonces, and byte slices.
 //!
 //! ## Usage
@@ -50,11 +50,11 @@
 //! - `core`: Contains core functionalities and algorithmic implementations.
 //! - `stream`: Provides the `ChaChaStream` struct and related functions for internal stream cipher operations.
 //!
-//! This library aims to provide an easy-to-use and efficient implementation of the ChaCha20 cipher, 
-//! suitable for various cryptographic needs. Whether you need high-level interfaces with `ChaCha20` 
+//! This library aims to provide an easy-to-use and efficient implementation of the ChaCha20 cipher,
+//! suitable for various cryptographic needs. Whether you need high-level interfaces with `ChaCha20`
 //! or low-level control with `ChaChaStream`, `secured-cipher` is equipped to meet your cryptographic requirements.
 
-pub use secured_cipher_key::{Key, random_bytes};
+pub use secured_cipher_key::{random_bytes, Key};
 pub mod chacha20;
 
 /// A type alias for representing a slice of bytes.

@@ -5,9 +5,9 @@
 pub mod core;
 pub mod stream;
 
+pub use self::core::{KEY_SIZE, NONCE_SIZE};
 use crate::{Bytes, Cipher, Slice};
 pub use stream::ChaChaStream;
-pub use self::core::{NONCE_SIZE, KEY_SIZE};
 
 /// Represents the ChaCha20 encryption/decryption cipher.
 ///

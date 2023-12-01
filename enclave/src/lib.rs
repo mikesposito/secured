@@ -1,7 +1,10 @@
 pub mod errors;
 
 pub use errors::EnclaveError;
-use secured_cipher::{chacha20::{ChaCha20, core::KEY_SIZE}, random_bytes, Cipher};
+use secured_cipher::{
+  chacha20::{core::KEY_SIZE, ChaCha20},
+  random_bytes, Cipher,
+};
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.
 ///
@@ -187,7 +190,8 @@ mod tests {
     fn it_should_serialize_and_deserialize_to_bytes() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let enclave = Enclave::<[u8; 2], 8>::from_plain_bytes([0_u8, 1_u8], key.pubk, bytes.clone()).unwrap();
+      let enclave =
+        Enclave::<[u8; 2], 8>::from_plain_bytes([0_u8, 1_u8], key.pubk, bytes.clone()).unwrap();
 
       let serialized: Vec<u8> = enclave.clone().into();
       let deserialized = Enclave::try_from(serialized).unwrap();

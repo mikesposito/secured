@@ -14,7 +14,7 @@ fn bench(c: &mut Criterion) {
     group.bench_with_input(BenchmarkId::new("encrypt", size), size, |b, &_size| {
       b.iter(|| {
         let buf = vec![0u8; *size];
-        Enclave::<&str, NONCE_SIZE>::from_plain_bytes("Metadata", key, buf)
+        Enclave::from_plain_bytes("Metadata", key, buf)
       });
     });
   }

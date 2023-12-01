@@ -62,7 +62,7 @@ fn main() {
 
    // Using Enclave for data encapsulation (&str metadata, 8-byte nonce)
    let enclave =
-      Enclave::<&str, 8>::from_plain_bytes("Some metadata", key.pubk, b"Some bytes to encrypt".to_vec())
+      Enclave::from_plain_bytes("Some metadata", key.pubk, b"Some bytes to encrypt".to_vec())
          .unwrap();
 
    // Get encrypted bytes (ciphertext)

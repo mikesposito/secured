@@ -80,8 +80,7 @@ fn encrypt_file(password: &String, filename: &String) {
 /// * `filename` - The name of the file to be decrypted.
 fn decrypt_file(password: &String, filename: &String) {
   let encrypted_bytes = get_file_as_byte_vec(filename);
-  let enclave = Enclave::try_from(encrypted_bytes)
-    .expect("Unable to deserialize enclave");
+  let enclave = Enclave::try_from(encrypted_bytes).expect("Unable to deserialize enclave");
   let encryption_key: Key<32, 16> = Key::with_salt(password.as_bytes(), enclave.metadata, 900_000);
   let recovered_bytes = enclave
     .decrypt(encryption_key.pubk)

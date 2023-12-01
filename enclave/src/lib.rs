@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn it_should_create_enclave() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key: Key<16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
 
       let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes);
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn it_should_decrypt_enclave() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key: Key<16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
       let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
 
@@ -179,10 +179,10 @@ mod tests {
 
     #[test]
     fn it_should_fail_with_wrong_key() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key: Key<16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
       let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
-      let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
+      let wrong_key: Key<16> = Key::new(b"my wrong password", 10_000);
 
       let decrypted_bytes = safe.decrypt(wrong_key.pubk).unwrap();
 
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn it_should_serialize_and_deserialize_to_bytes() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key: Key<16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
       let enclave = Enclave::from_plain_bytes([0_u8, 1_u8], key.pubk, bytes.clone()).unwrap();
 

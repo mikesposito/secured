@@ -12,6 +12,14 @@ pub const STATE_WORDS: usize = 16;
 /// The standard number of rounds is 20.
 pub const ROUNDS: usize = 20;
 
+/// Size of the nonce in bytes.
+/// The nonce is a 64-bit (8 bytes) value used to make each block unique.
+pub const NONCE_SIZE: usize = 8;
+
+/// Size of the key in bytes.
+/// The key is a 256-bit (32 bytes) value used for encryption and decryption.
+pub const KEY_SIZE: usize = 32;
+
 /// Performs the quarter round operation on the state.
 ///
 /// This operation modifies four words in the state as per the ChaCha20 algorithm's quarter round rules.

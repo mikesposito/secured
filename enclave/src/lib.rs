@@ -2,7 +2,10 @@ pub mod errors;
 
 pub use errors::EnclaveError;
 use secured_cipher::{
-  chacha20::{core::KEY_SIZE, ChaCha20},
+  chacha20::{
+    core::{KEY_SIZE, NONCE_SIZE},
+    ChaCha20,
+  },
   random_bytes, Cipher,
 };
 
@@ -14,7 +17,7 @@ use secured_cipher::{
 /// # Type Parameters
 /// * `T`: The type of metadata associated with the encrypted data.
 #[derive(Debug, Clone)]
-pub struct Enclave<T, const NONCE_SIZE: usize> {
+pub struct Enclave<T> {
   /// Metadata associated with the encrypted data.
   pub metadata: T,
 
@@ -25,7 +28,7 @@ pub struct Enclave<T, const NONCE_SIZE: usize> {
   nonce: [u8; NONCE_SIZE],
 }
 
-impl<T, const NONCE_SIZE: usize> Enclave<T, NONCE_SIZE> {
+impl<T> Enclave<T> {
   /// Creates a new `Enclave` instance from unencrypted data.
   ///
   /// # Arguments
@@ -66,7 +69,7 @@ impl<T, const NONCE_SIZE: usize> Enclave<T, NONCE_SIZE> {
   }
 }
 
-impl<T, const NONCE_SIZE: usize> From<Enclave<T, NONCE_SIZE>> for Vec<u8>
+impl<T> From<Enclave<T>> for Vec<u8>
 where
   T: TryFrom<Vec<u8>> + Into<Vec<u8>>,
 {
@@ -77,7 +80,7 @@ where
   ///
   /// # Returns
   /// A `Vec<u8>` representing the serialized enclave.
-  fn from(enclave: Enclave<T, NONCE_SIZE>) -> Vec<u8> {
+  fn from(enclave: Enclave<T>) -> Vec<u8> {
     let mut bytes: Vec<u8> = vec![];
     let metadata_bytes = enclave.metadata.into();
 
@@ -90,7 +93,7 @@ where
   }
 }
 
-impl<T, const NONCE_SIZE: usize> TryFrom<Vec<u8>> for Enclave<T, NONCE_SIZE>
+impl<T> TryFrom<Vec<u8>> for Enclave<T>
 where
   T: TryFrom<Vec<u8>> + Into<Vec<u8>>,
 {
@@ -121,7 +124,7 @@ where
   }
 }
 
-impl<T, const NONCE_SIZE: usize> PartialEq for Enclave<T, NONCE_SIZE>
+impl<T> PartialEq for Enclave<T>
 where
   T: PartialEq + TryFrom<Vec<u8>> + Into<Vec<u8>>,
 {
@@ -152,7 +155,7 @@ mod tests {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
 
-      let safe = Enclave::<&str, 8>::from_plain_bytes("metadata", key.pubk, bytes);
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes);
 
       assert!(safe.is_ok());
       assert_eq!(safe.unwrap().metadata, "metadata");
@@ -166,7 +169,7 @@ mod tests {
     fn it_should_decrypt_enclave() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::<&str, 8>::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
 
       let decrypted_bytes = safe.decrypt(key.pubk);
 
@@ -178,7 +181,7 @@ mod tests {
     fn it_should_fail_with_wrong_key() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::<&str, 8>::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
       let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
 
       let decrypted_bytes = safe.decrypt(wrong_key.pubk).unwrap();
@@ -190,8 +193,7 @@ mod tests {
     fn it_should_serialize_and_deserialize_to_bytes() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let enclave =
-        Enclave::<[u8; 2], 8>::from_plain_bytes([0_u8, 1_u8], key.pubk, bytes.clone()).unwrap();
+      let enclave = Enclave::from_plain_bytes([0_u8, 1_u8], key.pubk, bytes.clone()).unwrap();
 
       let serialized: Vec<u8> = enclave.clone().into();
       let deserialized = Enclave::try_from(serialized).unwrap();

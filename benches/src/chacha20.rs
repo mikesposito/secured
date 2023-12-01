@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use secured_cipher::chacha20::ChaChaStream;
+use secured_cipher::chacha20::{ChaChaStream, KEY_SIZE, NONCE_SIZE};
 
 const KB: usize = 1024;
 
@@ -7,8 +7,8 @@ fn bench(c: &mut Criterion) {
   let mut group = c.benchmark_group("ChaChaStream");
 
   for size in &[KB, 2 * KB, 4 * KB, 8 * KB, 16 * KB] {
-    let key = [0u8; 32];
-    let iv = [1u8; 8];
+    let key = [0u8; KEY_SIZE];
+    let iv = [1u8; NONCE_SIZE];
 
     group.throughput(Throughput::Bytes(*size as u64));
 

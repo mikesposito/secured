@@ -3,9 +3,8 @@ use rpassword::prompt_password;
 use std::fs::{metadata, File};
 use std::io::{Read, Write};
 
+use cipher::{chacha20::NONCE_SIZE, Key};
 use enclave::Enclave;
-
-use cipher::Key;
 
 /// Defines command line subcommands for the application.
 #[derive(Debug, Subcommand)]
@@ -58,7 +57,7 @@ fn main() {
 /// * `filename` - The name of the file to be encrypted.
 fn encrypt_file(password: &String, filename: &String) {
   let encryption_key: Key<32, 16> = Key::new(password.as_bytes(), 900_000);
-  let enclave = Enclave::from_plain_bytes(
+  let enclave = Enclave::<[u8; 16], NONCE_SIZE>::from_plain_bytes(
     encryption_key.salt,
     encryption_key.pubk,
     get_file_as_byte_vec(filename),
@@ -81,7 +80,8 @@ fn encrypt_file(password: &String, filename: &String) {
 /// * `filename` - The name of the file to be decrypted.
 fn decrypt_file(password: &String, filename: &String) {
   let encrypted_bytes = get_file_as_byte_vec(filename);
-  let enclave = Enclave::try_from(encrypted_bytes).expect("Unable to deserialize enclave");
+  let enclave = Enclave::<[u8; 16], NONCE_SIZE>::try_from(encrypted_bytes)
+    .expect("Unable to deserialize enclave");
   let encryption_key: Key<32, 16> = Key::with_salt(password.as_bytes(), enclave.metadata, 900_000);
   let recovered_bytes = enclave
     .decrypt(encryption_key.pubk)

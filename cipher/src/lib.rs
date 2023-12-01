@@ -26,7 +26,7 @@
 //! let nonce: [u8; 8] = [0; 8]; // Replace with your nonce
 //! let data: &[u8] = b"Your data here"; // Data to be encrypted
 //!
-//! let mut cipher = ChaCha20::new(key, nonce);
+//! let mut cipher = ChaCha20::new(&key, &nonce);
 //! let encrypted_data = cipher.encrypt(data);
 //! println!("Encrypted data: {:?}", encrypted_data);
 //! ```
@@ -40,7 +40,7 @@
 //! let nonce: [u8; 8] = [0; 8]; // Replace with your nonce
 //! let encrypted_data: &[u8] = &[0x1, 0x2, 0x3, 0x4]; // Replace with your encrypted data
 //!
-//! let mut cipher = ChaCha20::new(key, nonce);
+//! let mut cipher = ChaCha20::new(&key, &nonce);
 //! let decrypted_data = cipher.decrypt(encrypted_data);
 //! println!("Decrypted data: {:?}", decrypted_data);
 //! ```
@@ -54,8 +54,9 @@
 //! suitable for various cryptographic needs. Whether you need high-level interfaces with `ChaCha20`
 //! or low-level control with `ChaChaStream`, `secured-cipher` is equipped to meet your cryptographic requirements.
 
-pub use secured_cipher_key::{random_bytes, Key};
 pub mod chacha20;
+pub use secured_cipher_key::{random_bytes, Key};
+// pub use chacha20;
 
 /// A type alias for representing a slice of bytes.
 /// This is commonly used for raw data input/output in cryptographic operations.

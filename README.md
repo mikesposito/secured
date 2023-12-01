@@ -60,9 +60,9 @@ fn main() {
    // Key generation (32bytes for the key, 16 bytes for salt)
    let key = Key::<32, 16>::new(b"my password", 900_000); // 900K rounds
 
-   // Using Enclave for data encapsulation
+   // Using Enclave for data encapsulation (&str metadata, 8-byte nonce)
    let enclave =
-      Enclave::from_plain_bytes("Some metadata", key.pubk, b"Some bytes to encrypt".to_vec())
+      Enclave::<&str, 8>::from_plain_bytes("Some metadata", key.pubk, b"Some bytes to encrypt".to_vec())
          .unwrap();
 
    // Get encrypted bytes (ciphertext)

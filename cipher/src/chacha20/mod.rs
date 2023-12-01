@@ -5,6 +5,7 @@
 pub mod core;
 pub mod stream;
 
+pub use self::core::{KEY_SIZE, NONCE_SIZE};
 use crate::{Bytes, Cipher, Slice};
 pub use stream::ChaChaStream;
 
@@ -29,7 +30,17 @@ impl ChaCha20 {
   ///
   /// # Returns
   /// A new instance of `ChaCha20`.
-  pub fn new(key: [u8; 32], iv: [u8; 8]) -> Self {
+  pub fn new(key: &[u8], iv: &[u8]) -> Self {
+    let key: [u8; 32] = match key.len() {
+      KEY_SIZE => key.try_into().unwrap(),
+      _ => panic!("Invalid key length"),
+    };
+
+    let iv: [u8; 8] = match iv.len() {
+      NONCE_SIZE => iv.try_into().unwrap(),
+      _ => panic!("Invalid IV length"),
+    };
+
     Self {
       stream: ChaChaStream::new(key, iv),
     }
@@ -82,7 +93,7 @@ mod tests {
 
   #[test]
   fn it_should_encrypt_data() {
-    let mut cipher = ChaCha20::new(KEY, IV);
+    let mut cipher = ChaCha20::new(&KEY, &IV);
     let encrypted_data = cipher.encrypt(&PLAINTEXT);
 
     assert_eq!(encrypted_data.len(), 64);
@@ -91,7 +102,7 @@ mod tests {
 
   #[test]
   fn it_should_decrypt_data() {
-    let mut cipher = ChaCha20::new(KEY, IV);
+    let mut cipher = ChaCha20::new(&KEY, &IV);
     let decrypted_data = cipher.decrypt(&CIPHERTEXT);
 
     assert_eq!(decrypted_data.len(), 64);

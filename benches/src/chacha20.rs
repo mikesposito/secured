@@ -1,20 +1,34 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{
+  criterion_group, criterion_main, BenchmarkId, Criterion, PlotConfiguration, Throughput,
+};
 use secured_cipher::chacha20::{ChaChaStream, KEY_SIZE, NONCE_SIZE};
 
 const KB: usize = 1024;
 
 fn bench(c: &mut Criterion) {
   let mut group = c.benchmark_group("ChaChaStream");
+  let plot_config = PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
+  group.plot_config(plot_config);
 
-  for size in &[KB, 2 * KB, 4 * KB, 8 * KB, 16 * KB] {
+  for size in &[
+    KB,
+    2 * KB,
+    4 * KB,
+    8 * KB,
+    16 * KB,
+    32 * KB,
+    64 * KB,
+    128 * KB,
+    256 * KB,
+  ] {
     let key = [0u8; KEY_SIZE];
     let iv = [1u8; NONCE_SIZE];
 
     group.throughput(Throughput::Bytes(*size as u64));
 
-    group.bench_with_input(BenchmarkId::new("new", size), size, |b, &_size| {
-      b.iter(|| ChaChaStream::new(key, iv));
-    });
+    // group.bench_with_input(BenchmarkId::new("new", size), size, |b, &_size| {
+    //   b.iter(|| ChaChaStream::new(key, iv));
+    // });
 
     let mut stream = ChaChaStream::new(key, iv);
     group.bench_with_input(BenchmarkId::new("process", size), size, |b, &_size| {

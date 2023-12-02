@@ -1,3 +1,18 @@
+//! ChaCha20 Cryptographic Algorithm Implementation
+//!
+//! This module provides an implementation of the ChaCha20 stream cipher, 
+//! as specified in RFC 7539 by the Internet Engineering Task Force (IETF). 
+//! The implementation includes constants, state management, encryption/decryption functions, 
+//! and utilities for data transformation relevant to the ChaCha20 algorithm.
+//!
+//! The constants and logic, as well as the test vectors used in this module, 
+//! are based on and verifiable against the specifications detailed in the IETF paper: 
+//! "ChaCha20 and Poly1305 for IETF Protocols" (RFC 7539). 
+//! This can be accessed at https://datatracker.ietf.org/doc/html/rfc7539.
+//!
+//! The module is designed to be compliant with the RFC 7539 standard, ensuring reliability
+//! and correctness of the cryptographic operations as per the established IETF guidelines.
+
 /// Constants for the ChaCha20 algorithm.
 /// These four 32-bit words represent the ASCII encoding of "expand 32-byte k",
 /// used in the state initialization of the ChaCha20 block.

@@ -621,7 +621,6 @@ dependencies = [
 name = "secured-cipher"
 version = "0.1.0"
 dependencies = [
- "rayon",
  "secured-cipher-key",
 ]
 

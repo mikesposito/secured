@@ -4,6 +4,8 @@ use criterion::{
 use secured_cipher::chacha20::{ChaChaStream, KEY_SIZE, NONCE_SIZE};
 
 const KB: usize = 1024;
+const MB: usize = 1024 * KB;
+const GB: usize = 1024 * MB;
 
 fn bench(c: &mut Criterion) {
   let mut group = c.benchmark_group("ChaChaStream");
@@ -20,6 +22,18 @@ fn bench(c: &mut Criterion) {
     64 * KB,
     128 * KB,
     256 * KB,
+    512 * KB,
+    MB,
+    2 * MB,
+    4 * MB,
+    8 * MB,
+    16 * MB,
+    32 * MB,
+    64 * MB,
+    128 * MB,
+    256 * MB,
+    512 * MB,
+    GB,
   ] {
     let key = [0u8; KEY_SIZE];
     let iv = [1u8; NONCE_SIZE];

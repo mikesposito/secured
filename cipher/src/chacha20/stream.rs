@@ -13,6 +13,15 @@ use super::core::{
   CONSTANTS, STATE_WORDS,
 };
 
+/// The number of blocks to process in each parallel encryption thread.
+const PARALLEL_BLOCKS: usize = 32;
+
+/// The number of words that each thread should process.
+/// Each block is 64 bytes long, and each word is 4 bytes long.
+/// Therefore, each thread manages up to 16.384 bytes of data.
+/// TODO: This should be calculated dynamically based on the number of threads.
+const WORDS_PER_THREAD: usize = PARALLEL_BLOCKS * STATE_WORDS;
+
 /// A ChaCha20 cipher stream.
 ///
 /// This struct represents a single state of the ChaCha20 cipher,
@@ -122,7 +131,7 @@ impl ChaChaStream {
 
     // Process each chunk of 8 blocks in parallel
     out
-      .par_chunks_mut(128)
+      .par_chunks_mut(WORDS_PER_THREAD)
       .enumerate()
       .for_each(|(i, blocks_chunk)| {
         blocks_chunk
@@ -130,7 +139,7 @@ impl ChaChaStream {
           .enumerate()
           .for_each(|(j, block)| {
             // Cipher each 64-byte block in the chunk
-            let chunk_keystream = seek_keystream(&arc_state, (i + j) as u64);
+            let chunk_keystream = seek_keystream(&arc_state, (i * PARALLEL_BLOCKS + j) as u64);
             xor(block, &chunk_keystream);
           });
       });
@@ -165,13 +174,11 @@ mod tests {
     0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
   ];
   const CIPHERTEXT: [u8; 100] = [
-    0x92, 0x96, 0x40, 0xc6, 0x6f, 0x7a, 0xa6, 0x3e, 0x40, 0x5e, 0x1b, 0x1d, 0x94, 0xa4, 0x8d, 0x69,
-    0xc7, 0x16, 0xbe, 0xdf, 0x8d, 0xd2, 0xe6, 0xda, 0xde, 0xf7, 0xd5, 0xe7, 0x15, 0x18, 0x51, 0x5d,
-    0x40, 0x67, 0x67, 0x60, 0x8a, 0x0, 0x82, 0xe1, 0x37, 0x97, 0x41, 0x61, 0xfa, 0xac, 0xd1, 0x14,
-    0x9, 0xc5, 0x0, 0x32, 0xb1, 0xd0, 0xf1, 0xbd, 0x69, 0x7c, 0x3f, 0x93, 0x27, 0xda, 0xdd, 0xf1,
-    0xbf, 0x86, 0x5e, 0x87, 0x22, 0x7c, 0xb4, 0x21, 0xf, 0x12, 0x1e, 0x58, 0x9c, 0xed, 0x9c, 0x61,
-    0xde, 0xf, 0xb6, 0x91, 0xdb, 0xdf, 0xee, 0xda, 0xd5, 0xea, 0xc7, 0xb3, 0x14, 0x14, 0x10, 0x59,
-    0x5b, 0x7a, 0x72, 0x21,
+    146, 150, 64, 198, 111, 122, 166, 62, 64, 94, 27, 29, 148, 164, 141, 105, 199, 22, 190, 223,
+    141, 210, 230, 218, 222, 247, 213, 231, 21, 24, 81, 93, 64, 103, 103, 96, 138, 0, 130, 225, 55,
+    151, 65, 97, 250, 172, 209, 20, 9, 197, 0, 50, 177, 208, 241, 189, 105, 124, 63, 147, 39, 218,
+    221, 241, 252, 156, 130, 147, 207, 121, 84, 225, 138, 201, 229, 31, 254, 87, 183, 196, 224,
+    133, 32, 87, 225, 118, 59, 0, 115, 54, 126, 60, 122, 35, 3, 45, 150, 13, 11, 66,
   ];
   const IV: [u8; 8] = [0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8];
 

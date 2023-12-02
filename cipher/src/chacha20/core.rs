@@ -78,9 +78,9 @@ pub fn chacha20_rounds(out: &mut [u32; 16], add: Option<[u32; 16]>) {
 
 pub fn seek_keystream(state: &[u32; 16], n: u64) -> [u32; 16] {
   let mut state = state.clone();
-  let mut keystream = state;
-
   safe_2words_counter_increment_n(&mut state[12..14], n);
+
+  let mut keystream = state;
   chacha20_rounds(&mut keystream, Some(state));
 
   keystream

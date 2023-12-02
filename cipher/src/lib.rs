@@ -50,7 +50,7 @@ pub mod permutation;
 
 pub use secured_cipher_key::{random_bytes, Key};
 
-use permutation::{ChaCha20, Permutation};
+pub use permutation::{ChaCha20, Permutation};
 
 /// The `Cipher` struct provides a common interface for cryptographic operations,
 /// specifically focusing on encryption and decryption.

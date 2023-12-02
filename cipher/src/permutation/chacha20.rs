@@ -37,8 +37,12 @@ impl ChaCha20 {
   ///
   /// # Example
   /// ```
-  /// // Assuming `self` is a valid mutable reference to a ChaCha20 cipher instance
-  /// let keystream_block = self.next_keystream();
+  /// use secured_cipher::{ChaCha20, Permutation};
+  /// 
+  /// let mut chacha20 = ChaCha20::new();
+  /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
+  /// 
+  /// let keystream_block = chacha20.next_keystream();
   /// // `keystream_block` now contains the next 64 bytes of the keystream
   /// ```
   ///
@@ -131,9 +135,13 @@ impl Permutation for ChaCha20 {
   ///
   /// # Example
   /// ```
-  /// // Assuming `self` is a valid mutable reference to a ChaCha20 cipher instance
+  /// use secured_cipher::{ChaCha20, Permutation};
+  /// 
+  /// let mut chacha20 = ChaCha20::new();
+  /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
+  /// 
   /// let data = b"some plaintext data"; // Data to be encrypted or decrypted
-  /// let processed_data = self.process(data);
+  /// let processed_data = chacha20.process(data);
   /// // `processed_data` now contains the encrypted or decrypted output
   /// ```
   ///

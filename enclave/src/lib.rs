@@ -2,12 +2,11 @@ pub mod errors;
 
 pub use errors::EnclaveError;
 use secured_cipher::{
-  chacha20::{
-    core::{KEY_SIZE, NONCE_SIZE},
-    ChaCha20,
-  },
+  permutation::core::{KEY_SIZE, XCHACHA20_NONCE_SIZE},
   random_bytes, Cipher,
 };
+
+const NONCE_SIZE: usize = XCHACHA20_NONCE_SIZE;
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.
 ///
@@ -44,9 +43,7 @@ impl<T> Enclave<T> {
     plain_bytes: Vec<u8>,
   ) -> Result<Self, String> {
     let nonce = random_bytes::<NONCE_SIZE>();
-    let mut cipher = ChaCha20::new(&key, &nonce);
-
-    let encrypted_bytes = cipher.encrypt(&plain_bytes);
+    let encrypted_bytes = Cipher::default().init(&key, &nonce).encrypt(&plain_bytes);
 
     Ok(Enclave {
       metadata,
@@ -63,9 +60,11 @@ impl<T> Enclave<T> {
   /// # Returns
   /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
   pub fn decrypt(&self, key: [u8; KEY_SIZE]) -> Result<Vec<u8>, String> {
-    let mut cipher = ChaCha20::new(&key, &self.nonce);
-
-    Ok(cipher.decrypt(&self.encrypted_bytes))
+    Ok(
+      Cipher::default()
+        .init(&key, &self.nonce)
+        .decrypt(&self.encrypted_bytes),
+    )
   }
 }
 

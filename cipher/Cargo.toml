@@ -2,6 +2,7 @@
 name = "secured-cipher"
 version = "0.2.0"
 authors = ["mikesposito"]
+repository = "https://github.com/mikesposito/secured/"
 edition = "2021"
 license = "MIT"
 description = "Pure Rust implementation of the ChaCha cipher family"

@@ -7,10 +7,10 @@
 //!
 //! The library includes the following key components:
 //!
+//! - `core`: A module containing essential ChaCha20 cryptographic functionalities.
 //! - `ChaCha20`: A struct for the ChaCha20 stream cipher algorithm.
-//! - `XChaCha20`: A struct for the XChaCha20 stream cipher algorithm.
 //! - `Cipher`: A struct that provides a common interface for cryptographic operations, focusing on encryption and decryption.
-//! - `CipherMode`: An enum to specify the mode of the cipher (ChaCha20 or XChaCha20).
+//! - `CipherMode`: An enum to specify the mode of the cipher (only ChaCha20 for now).
 //!
 //! ## Features
 //!

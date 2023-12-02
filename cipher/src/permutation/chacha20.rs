@@ -1,12 +1,12 @@
 use crate::permutation::core::CHACHA20_NONCE_SIZE;
 
-use super::core::{permute, xor_bytes, CONSTANTS, STATE_WORDS};
+use super::core::{permute, xor_bytes, CONSTANTS, STATE_WORDS, Block};
 
 use super::Permutation;
 
 /// The `ChaCha20` struct represents the ChaCha20 stream cipher.
 pub struct ChaCha20 {
-  state: [u32; STATE_WORDS],
+  state: Block,
 }
 
 impl ChaCha20 {

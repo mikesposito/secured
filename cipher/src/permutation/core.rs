@@ -39,14 +39,8 @@ pub const XCHACHA20_NONCE_SIZE: usize = 16;
 /// The key is a 256-bit (32 bytes) value used for encryption and decryption.
 pub const KEY_SIZE: usize = 32;
 
-/// The number of blocks to process in each parallel encryption thread.
-pub const PARALLEL_BLOCKS: usize = 32;
-
-/// The number of words that each thread should process.
-/// Each block is 64 bytes long, and each word is 4 bytes long.
-/// Therefore, each thread manages up to 16.384 bytes of data.
-/// TODO: This should be calculated dynamically based on the number of threads.
-pub const WORDS_PER_THREAD: usize = PARALLEL_BLOCKS * STATE_WORDS;
+/// The array of words representing a ChaCha20 block.
+pub type Block = [u32; STATE_WORDS];
 
 /// Performs the quarter round operation on the state.
 ///
@@ -56,7 +50,7 @@ pub const WORDS_PER_THREAD: usize = PARALLEL_BLOCKS * STATE_WORDS;
 /// # Arguments
 /// * `a`, `b`, `c`, `d` - Indices of the state words to be modified.
 /// * `state` - A mutable reference to the 512-bit state array.
-pub fn quarter_round(a: usize, b: usize, c: usize, d: usize, state: &mut [u32; STATE_WORDS]) {
+pub fn quarter_round(a: usize, b: usize, c: usize, d: usize, state: &mut Block) {
   state[a] = state[a].wrapping_add(state[b]);
   state[d] ^= state[a];
   state[d] = state[d].rotate_left(16);
@@ -75,7 +69,7 @@ pub fn quarter_round(a: usize, b: usize, c: usize, d: usize, state: &mut [u32; S
 }
 
 /// Runs the ChaCha20 permutation on the provided state.
-pub fn permute(state: &[u32; STATE_WORDS]) -> [u32; STATE_WORDS] {
+pub fn permute(state: &Block) -> Block {
   let mut block = state.clone();
 
   // The ChaCha20 permutation consists of 20 rounds of quarter round operations.
@@ -91,7 +85,7 @@ pub fn permute(state: &[u32; STATE_WORDS]) -> [u32; STATE_WORDS] {
 
 /// Runs the ChaCha20 rounds on the provided state.
 /// This function modifies the state in place.
-pub fn run_rounds(state: &mut [u32; STATE_WORDS]) {
+pub fn run_rounds(state: &mut Block) {
   for _ in 0..ROUNDS {
     // Odd rounds
     quarter_round(0, 4, 8, 12, state);
@@ -104,40 +98,6 @@ pub fn run_rounds(state: &mut [u32; STATE_WORDS]) {
     quarter_round(2, 7, 8, 13, state);
     quarter_round(3, 4, 9, 14, state);
   }
-}
-
-/// Performs the ChaCha20 rounds on the provided state.
-///
-/// Applies the quarter round operation multiple times as defined by the ROUNDS constant.
-/// Optionally, if an additional state is provided, it adds this state to the output after the rounds.
-///
-/// # Arguments
-/// * `out` - A mutable reference to the state array on which the rounds are performed.
-/// * `add` - An optional additional state array to add to `out` after the rounds are completed.
-pub fn chacha20_rounds(out: &mut [u32; 16], add: Option<[u32; 16]>) {
-  run_rounds(out);
-
-  if let Some(add) = add {
-    // The original ChaCha20 algorithm adds the original state to the output of the rounds.
-    for (s1, s0) in out.iter_mut().zip(add.iter()) {
-      *s1 = s1.wrapping_add(*s0);
-    }
-  }
-}
-
-pub fn seek_keystream(state: &[u32; 16], n: u64, counter_size: usize) -> [u32; 16] {
-  let mut state = state.clone();
-  let mut keystream = state;
-
-  chacha20_rounds(&mut keystream, Some(state));
-
-  match counter_size {
-    1 => safe_1word_counter_increment_n(&mut state[12], n as u32),
-    2 => safe_2words_counter_increment_n(&mut state[12..14], n),
-    _ => panic!("Invalid counter size"),
-  }
-
-  keystream
 }
 
 /// XORs two 512-bit state arrays.
@@ -160,126 +120,13 @@ pub fn xor_bytes(left: &mut [u8], right: &[u8]) {
     .for_each(|(left, right)| *left ^= *right);
 }
 
-/// XORs two 512-bit state arrays.
-/// This function modifies the first array in place.
-///
-/// # Arguments
-/// * `a` - A mutable reference to the first state array.
-/// * `b` - A reference to the second state array.
-///
-/// # Panics
-/// Panics if the two arrays are not of equal length.
-pub fn xor(left: &mut [u32], right: &[u32]) {
-  assert!(
-    right.len() >= left.len(),
-    "The left array can't be XORed completely with the right array"
-  );
-  left
-    .iter_mut()
-    .zip(right.iter())
-    .for_each(|(left, right)| *left ^= *right);
-}
-
-/// Safely increments the 2-word block counter of the ChaCha20 state.
-///
-/// This function increments the lower 32 bits of the counter and, if there is an overflow,
-/// increments the upper 32 bits. It checks for overflow in the upper bits and panics if detected.
-///
-/// # Arguments
-/// * `counter` - A mutable slice of the two 32-bit words forming the block counter.
-pub fn safe_2words_counter_increment(counter: &mut [u32]) {
-  let (lower_word_increment, lower_overflow) = counter[0].overflowing_add(1);
-  counter[0] = lower_word_increment;
-  if lower_overflow {
-    let (higher_word_increment, higher_overflow) = counter[1].overflowing_add(1);
-    assert!(!higher_overflow, "ChaCha20 block counter overflow");
-    counter[1] = higher_word_increment;
-  }
-}
-
-pub fn safe_1word_counter_increment_n(counter: &mut u32, n: u32) {
-  let (increment, overflow) = counter.overflowing_add(n as u32);
-
-  if overflow {
-    panic!("ChaCha20 block counter overflow");
-  }
-
-  *counter = counter.wrapping_add(n);
-}
-
-pub fn safe_2words_counter_increment_n(counter: &mut [u32], n: u64) {
-  counter[0] = counter[0].wrapping_add(n as u32);
-  if counter[0] < n as u32 {
-    counter[1] = counter[1].wrapping_add(1);
-  }
-}
-
-/// Converts a slice of bytes to a vector of 32-bit unsigned integers.
-///
-/// The byte slice is divided into chunks of 4 bytes each, with each chunk being converted
-/// to a 32-bit integer. This is commonly used to convert input data into the format needed for ChaCha20 processing.
-///
-/// # Arguments
-/// * `bytes` - A slice of bytes to be converted.
-///
-/// # Returns
-/// A vector of 32-bit unsigned integers.
-pub fn to_u32_slice(bytes: &[u8]) -> Vec<u32> {
-  bytes
-    .chunks(4)
-    .map(|chunk| {
-      let mut array = [0u8; 4];
-      for (dest_elem, src_elem) in array.iter_mut().zip(chunk) {
-        *dest_elem = *src_elem;
-      }
-      u32::from_le_bytes(array)
-    })
-    .collect()
-}
-
-/// Splits a slice of 32-bit words into chunks of 16 words each.
-///
-/// This function is typically used to prepare data for processing in the ChaCha20 algorithm,
-/// where the state operates on 16-word (512-bit) blocks.
-///
-/// # Arguments
-/// * `bytes` - A slice of 32-bit words to be chunked.
-///
-/// # Returns
-/// A vector of 16-word arrays.
-pub fn u32_slice_to_16words_chunks(bytes: &[u32]) -> Vec<Vec<u32>> {
-  bytes.chunks(16).map(|chunk| chunk.to_vec()).collect()
-}
-
-/// Converts a vector of 32-bit unsigned integers into a vector of bytes.
-///
-/// This function is useful for situations where you have a collection of 32-bit integers
-/// and need to represent them as a sequence of bytes, such as when preparing data for
-/// cryptographic algorithms or for certain IO operations.
-///
-/// Each 32-bit integer is split into four bytes in little-endian order. The resulting byte
-/// stream concatenates these byte sequences from each integer.
-///
-/// # Arguments
-/// * `input` - A vector of 32-bit unsigned integers.
-///
-/// # Returns
-/// A vector of bytes, where each 32-bit integer from the input is represented
-/// as four consecutive bytes in the output vector.
-pub fn u32_to_u8_vec(input: &[u32]) -> Vec<u8> {
-  input
-    .into_iter()
-    .flat_map(|value| value.to_le_bytes().to_vec())
-    .collect()
-}
-
 #[cfg(test)]
 mod test {
   use super::*;
 
   #[test]
   fn it_should_do_the_quarter_round() {
-    let mut state: [u32; STATE_WORDS] = [
+    let mut state: Block = [
       0x879531e0, 0xc5ecf37d, 0x516461b1, 0xc9a62f8a, 0x44c20ef3, 0x3390af7f, 0xd9fc690b,
       0x2a5f714c, 0x53372767, 0xb00a5631, 0x974c541a, 0x359e9963, 0x5c971061, 0x3d631689,
       0x2098d9d6, 0x91dbd320,
@@ -299,7 +146,7 @@ mod test {
 
   #[test]
   fn it_runs_all_the_quarter_rounds() {
-    let mut state: [u32; 16] = [
+    let mut state: Block = [
       0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, 0x03020100, 0x07060504, 0x0b0a0908,
       0x0f0e0d0c, 0x13121110, 0x17161514, 0x1b1a1918, 0x1f1e1d1c, 0x00000001, 0x09000000,
       0x4a000000, 0x00000000,
@@ -319,7 +166,7 @@ mod test {
 
   #[test]
   fn it_executes_the_chacha20_permutation() {
-    let state: [u32; 16] = [
+    let state: Block = [
       0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, 0x03020100, 0x07060504, 0x0b0a0908,
       0x0f0e0d0c, 0x13121110, 0x17161514, 0x1b1a1918, 0x1f1e1d1c, 0x00000001, 0x09000000,
       0x4a000000, 0x00000000,

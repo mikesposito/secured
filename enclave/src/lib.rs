@@ -2,7 +2,7 @@ pub mod errors;
 
 pub use errors::EnclaveError;
 use secured_cipher::{
-  permutation::core::{KEY_SIZE, CHACHA20_NONCE_SIZE},
+  permutation::core::{CHACHA20_NONCE_SIZE, KEY_SIZE},
   random_bytes, Cipher,
 };
 
@@ -63,7 +63,8 @@ impl<T> Enclave<T> {
     Ok(
       Cipher::default()
         .init(&key, &self.nonce)
-        .decrypt(&self.encrypted_bytes),
+        .decrypt(&self.encrypted_bytes)
+        .or(Err("decryption failed".to_string()))?,
     )
   }
 }
@@ -183,9 +184,9 @@ mod tests {
       let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
       let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
 
-      let decrypted_bytes = safe.decrypt(wrong_key.pubk).unwrap();
+      let decrypted_bytes = safe.decrypt(wrong_key.pubk);
 
-      assert_ne!(decrypted_bytes, bytes);
+      assert!(!decrypted_bytes.is_ok());
     }
 
     #[test]

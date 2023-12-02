@@ -4,6 +4,8 @@ pub mod core;
 /// Module for the ChaCha20 stream cipher algorithm.
 pub mod chacha20;
 
+pub mod poly1305;
+
 /// Re-exporting `ChaCha20` for direct use.
 pub use chacha20::ChaCha20;
 

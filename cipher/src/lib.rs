@@ -48,6 +48,9 @@
 
 pub mod permutation;
 
+use std::error::Error;
+
+use permutation::poly1305::Poly1305;
 pub use secured_cipher_key::{random_bytes, Key};
 
 pub use permutation::{ChaCha20, Permutation};
@@ -57,10 +60,13 @@ pub use permutation::{ChaCha20, Permutation};
 pub struct Cipher {
   /// The cipher's internal permutation logic.
   permutation: Box<dyn Permutation>,
+
+  authenticator: Option<Box<dyn Permutation>>,
 }
 
 pub enum CipherMode {
   ChaCha20,
+  ChaCha20Poly1305,
   // TODO: XChaCha20,
 }
 
@@ -74,11 +80,19 @@ impl Cipher {
   /// A new instance of `Cipher`.
   pub fn new(mode: CipherMode) -> Self {
     let permutation: Box<dyn Permutation> = match mode {
-      CipherMode::ChaCha20 => Box::new(ChaCha20::new()),
+      _ => Box::new(ChaCha20::new()),
       // TODO: CipherMode::XChaCha20 => Box::new(XChaCha20::new()),
     };
 
-    Self { permutation }
+    let authenticator: Option<Box<dyn Permutation>> = match mode {
+      CipherMode::ChaCha20Poly1305 => Some(Box::new(Poly1305::new())),
+      _ => None,
+    };
+
+    Self {
+      permutation,
+      authenticator,
+    }
   }
 
   /// Initializes the cipher with a key and IV (initialization vector).
@@ -92,6 +106,11 @@ impl Cipher {
   /// A mutable reference to the cipher instance.
   pub fn init(&mut self, key: &[u8], iv: &[u8]) -> &mut Self {
     self.permutation.init(key, iv);
+
+    if let Some(authenticator) = &mut self.authenticator {
+      authenticator.init(key, iv);
+    }
+
     self
   }
 
@@ -103,7 +122,14 @@ impl Cipher {
   /// # Returns
   /// Encrypted data as a vector of bytes (`Bytes`).
   pub fn encrypt(&mut self, data: &[u8]) -> Vec<u8> {
-    self.permutation.process(data)
+    let encrypted_data = self.permutation.process(data);
+    let authentication_tag = if let Some(authenticator) = &mut self.authenticator {
+      authenticator.process(&encrypted_data)
+    } else {
+      vec![]
+    };
+
+    [encrypted_data, authentication_tag].concat()
   }
 
   /// Decrypts the provided data.
@@ -113,8 +139,24 @@ impl Cipher {
   ///
   /// # Returns
   /// Decrypted data as a vector of bytes (`Bytes`).
-  pub fn decrypt(&mut self, data: &[u8]) -> Vec<u8> {
-    self.permutation.process(data)
+  pub fn decrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, CipherError> {
+    let (encrypted_data, tag) = match self.authenticator {
+      Some(_) => (&data[..data.len() - 16], Some(&data[data.len() - 16..])),
+      None => (data, None),
+    };
+
+    let plaintext = self.permutation.process(encrypted_data);
+    let computed_tag = if let Some(authenticator) = &mut self.authenticator {
+      authenticator.process(encrypted_data)
+    } else {
+      vec![]
+    };
+
+    if tag.is_some() && tag.unwrap() != computed_tag {
+      return Err(CipherError::AuthenticationFailed);
+    }
+
+    Ok(plaintext)
   }
 }
 
@@ -124,6 +166,21 @@ impl Default for Cipher {
   /// # Returns
   /// A new instance of `Cipher` with XChaCha20 mode.
   fn default() -> Self {
-    Self::new(CipherMode::ChaCha20)
+    Self::new(CipherMode::ChaCha20Poly1305)
+  }
+}
+
+#[derive(Debug)]
+pub enum CipherError {
+  AuthenticationFailed,
+}
+
+impl Error for CipherError {}
+
+impl std::fmt::Display for CipherError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      CipherError::AuthenticationFailed => write!(f, "Authentication failed"),
+    }
   }
 }

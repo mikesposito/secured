@@ -14,12 +14,12 @@ members = ["enclave", "cipher", "cipher/key", "benches"]
 [dependencies.enclave]
 package = "secured-enclave"
 path = "enclave"
-version = "0.2.0"
+version = "0.3.0"
 
 [dependencies.cipher]
 package = "secured-cipher"
 path = "cipher"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies.clap]
 version = "^4.0.0"

@@ -9,9 +9,18 @@ use crate::{Bytes, Slice};
 use rayon::prelude::*;
 
 use super::core::{
-  chacha20_rounds, safe_2words_counter_increment, seek_keystream, to_u32_slice, u32_to_u8_vec,
+  chacha20_rounds, safe_2words_counter_increment, seek_keystream, to_u32_slice, u32_to_u8_vec, xor,
   CONSTANTS, STATE_WORDS,
 };
+
+/// The number of blocks to process in each parallel encryption thread.
+const PARALLEL_BLOCKS: usize = 32;
+
+/// The number of words that each thread should process.
+/// Each block is 64 bytes long, and each word is 4 bytes long.
+/// Therefore, each thread manages up to 16.384 bytes of data.
+/// TODO: This should be calculated dynamically based on the number of threads.
+const WORDS_PER_THREAD: usize = PARALLEL_BLOCKS * STATE_WORDS;
 
 /// A ChaCha20 cipher stream.
 ///
@@ -52,7 +61,8 @@ impl ChaChaStream {
 
     // The block counter occupies the next two words (13th and 14th positions) in the state.
     // In ChaCha20, this counter is used to make each block unique.
-    // Here, it's initialized from the first half of the 8-byte IV (initialization vector).
+    // We skip those they are set to zero already.
+    // Here, we use the last 8-byte space of the block for the IV (initialization vector).
     let iv_chunks = iv.chunks_exact(4);
     for (val, chunk) in state[14..16].iter_mut().zip(iv_chunks) {
       *val = u32::from_le_bytes(chunk.try_into().unwrap());
@@ -119,20 +129,20 @@ impl ChaChaStream {
     // Wrap the state in an Arc to allow for parallel processing
     let arc_state = Arc::new(self.state);
 
-    // Process each 64-byte block in parallel
-    out.par_chunks_mut(64).enumerate().for_each(|(i, chunk)| {
-      let chunk_keystream = seek_keystream(&arc_state, i as u64);
-
-      for (k, out_elem) in chunk.iter_mut().enumerate() {
-        if k >= chunk_keystream.len() {
-          // If the chunk is smaller than 64 bytes, the keystream will be shorter than 64 bytes.
-          break;
-        }
-
-        // XOR the output with the keystream
-        *out_elem ^= chunk_keystream[k];
-      }
-    });
+    // Process each chunk of 8 blocks in parallel
+    out
+      .par_chunks_mut(WORDS_PER_THREAD)
+      .enumerate()
+      .for_each(|(i, blocks_chunk)| {
+        blocks_chunk
+          .chunks_mut(STATE_WORDS)
+          .enumerate()
+          .for_each(|(j, block)| {
+            // Cipher each 64-byte block in the chunk
+            let chunk_keystream = seek_keystream(&arc_state, (i * PARALLEL_BLOCKS + j) as u64);
+            xor(block, &chunk_keystream);
+          });
+      });
 
     // Clear the keystream
     self.clear_stream();
@@ -164,13 +174,11 @@ mod tests {
     0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
   ];
   const CIPHERTEXT: [u8; 100] = [
-    0x92, 0x96, 0x40, 0xC6, 0x6F, 0x7A, 0xA6, 0x3E, 0x40, 0x5E, 0x1B, 0x1D, 0x94, 0xA4, 0x8D, 0x69,
-    0xC7, 0x16, 0xBE, 0xDF, 0x8D, 0xD2, 0xE6, 0xDA, 0xDE, 0xF7, 0xD5, 0xE7, 0x15, 0x18, 0x51, 0x5D,
-    0x40, 0x67, 0x67, 0x60, 0x8A, 0x00, 0x82, 0xE1, 0x37, 0x97, 0x41, 0x61, 0xFA, 0xAC, 0xD1, 0x14,
-    0x09, 0xC5, 0x00, 0x32, 0xB1, 0xD0, 0xF1, 0xBD, 0x69, 0x7C, 0x3F, 0x93, 0x27, 0xDA, 0xDD, 0xF1,
-    0x63, 0x75, 0x72, 0x61, 0x20, 0x63, 0x68, 0x65, 0x20, 0x6C, 0x61, 0x20, 0x64, 0x69, 0x72, 0x69,
-    0x74, 0x74, 0x61, 0x20, 0x76, 0x69, 0x61, 0x20, 0x65, 0x72, 0x61, 0x20, 0x73, 0x6D, 0x61, 0x72,
-    0x72, 0x69, 0x74, 0x61,
+    146, 150, 64, 198, 111, 122, 166, 62, 64, 94, 27, 29, 148, 164, 141, 105, 199, 22, 190, 223,
+    141, 210, 230, 218, 222, 247, 213, 231, 21, 24, 81, 93, 64, 103, 103, 96, 138, 0, 130, 225, 55,
+    151, 65, 97, 250, 172, 209, 20, 9, 197, 0, 50, 177, 208, 241, 189, 105, 124, 63, 147, 39, 218,
+    221, 241, 252, 156, 130, 147, 207, 121, 84, 225, 138, 201, 229, 31, 254, 87, 183, 196, 224,
+    133, 32, 87, 225, 118, 59, 0, 115, 54, 126, 60, 122, 35, 3, 45, 150, 13, 11, 66,
   ];
   const IV: [u8; 8] = [0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8];
 

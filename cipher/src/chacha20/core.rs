@@ -78,12 +78,32 @@ pub fn chacha20_rounds(out: &mut [u32; 16], add: Option<[u32; 16]>) {
 
 pub fn seek_keystream(state: &[u32; 16], n: u64) -> [u32; 16] {
   let mut state = state.clone();
-  let mut keystream = state;
-
   safe_2words_counter_increment_n(&mut state[12..14], n);
+
+  let mut keystream = state;
   chacha20_rounds(&mut keystream, Some(state));
 
   keystream
+}
+
+/// XORs two 512-bit state arrays.
+/// This function modifies the first array in place.
+///
+/// # Arguments
+/// * `a` - A mutable reference to the first state array.
+/// * `b` - A reference to the second state array.
+///
+/// # Panics
+/// Panics if the two arrays are not of equal length.
+pub fn xor(left: &mut [u32], right: &[u32]) {
+  assert!(
+    right.len() >= left.len(),
+    "The left array can't be XORed completely with the right array"
+  );
+  left
+    .iter_mut()
+    .zip(right.iter())
+    .for_each(|(left, right)| *left ^= *right);
 }
 
 /// Safely increments the 2-word block counter of the ChaCha20 state.

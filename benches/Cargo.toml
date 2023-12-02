@@ -13,11 +13,6 @@ secured-enclave = { path = "../enclave/" }
 secured-cipher = { path = "../cipher/" }
 
 [[bench]]
-name = "enclave"
-path = "src/enclave.rs"
-harness = false
-
-[[bench]]
 name = "chacha20"
 path = "src/chacha20.rs"
 harness = false

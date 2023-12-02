@@ -10,15 +10,28 @@ pub const STATE_WORDS: usize = 16;
 /// Number of ChaCha20 rounds.
 /// This constant defines how many rounds of the main ChaCha20 algorithm will be executed.
 /// The standard number of rounds is 20.
-pub const ROUNDS: usize = 20;
+pub const ROUNDS: usize = 10;
 
-/// Size of the nonce in bytes.
+/// Size of the ChaCha20 nonce in bytes.
 /// The nonce is a 64-bit (8 bytes) value used to make each block unique.
-pub const NONCE_SIZE: usize = 8;
+pub const CHACHA20_NONCE_SIZE: usize = 12;
+
+/// Size of the XChaCha20 nonce in bytes.
+/// The nonce is a 128-bit (16 bytes) value used to make each block unique.
+pub const XCHACHA20_NONCE_SIZE: usize = 16;
 
 /// Size of the key in bytes.
 /// The key is a 256-bit (32 bytes) value used for encryption and decryption.
 pub const KEY_SIZE: usize = 32;
+
+/// The number of blocks to process in each parallel encryption thread.
+pub const PARALLEL_BLOCKS: usize = 32;
+
+/// The number of words that each thread should process.
+/// Each block is 64 bytes long, and each word is 4 bytes long.
+/// Therefore, each thread manages up to 16.384 bytes of data.
+/// TODO: This should be calculated dynamically based on the number of threads.
+pub const WORDS_PER_THREAD: usize = PARALLEL_BLOCKS * STATE_WORDS;
 
 /// Performs the quarter round operation on the state.
 ///
@@ -46,6 +59,38 @@ pub fn quarter_round(a: usize, b: usize, c: usize, d: usize, state: &mut [u32; S
   state[b] = state[b].rotate_left(7);
 }
 
+/// Runs the ChaCha20 permutation on the provided state.
+pub fn permute(state: &[u32; STATE_WORDS]) -> [u32; STATE_WORDS] {
+  let mut block = state.clone();
+
+  // The ChaCha20 permutation consists of 20 rounds of quarter round operations.
+  run_rounds(&mut block);
+
+  // The original ChaCha20 algorithm adds the original state to the output of the rounds.
+  for (s1, s0) in block.iter_mut().zip(state.iter()) {
+    *s1 = s1.wrapping_add(*s0);
+  }
+
+  block
+}
+
+/// Runs the ChaCha20 rounds on the provided state.
+/// This function modifies the state in place.
+pub fn run_rounds(state: &mut [u32; STATE_WORDS]) {
+  for _ in 0..ROUNDS {
+    // Odd rounds
+    quarter_round(0, 4, 8, 12, state);
+    quarter_round(1, 5, 9, 13, state);
+    quarter_round(2, 6, 10, 14, state);
+    quarter_round(3, 7, 11, 15, state);
+    // Even rounds
+    quarter_round(0, 5, 10, 15, state);
+    quarter_round(1, 6, 11, 12, state);
+    quarter_round(2, 7, 8, 13, state);
+    quarter_round(3, 4, 9, 14, state);
+  }
+}
+
 /// Performs the ChaCha20 rounds on the provided state.
 ///
 /// Applies the quarter round operation multiple times as defined by the ROUNDS constant.
@@ -55,35 +100,49 @@ pub fn quarter_round(a: usize, b: usize, c: usize, d: usize, state: &mut [u32; S
 /// * `out` - A mutable reference to the state array on which the rounds are performed.
 /// * `add` - An optional additional state array to add to `out` after the rounds are completed.
 pub fn chacha20_rounds(out: &mut [u32; 16], add: Option<[u32; 16]>) {
-  for _ in 0..ROUNDS {
-    // Odd rounds
-    quarter_round(0, 4, 8, 12, out);
-    quarter_round(1, 5, 9, 13, out);
-    quarter_round(2, 6, 10, 14, out);
-    quarter_round(3, 7, 11, 15, out);
-    // Even rounds
-    quarter_round(0, 5, 10, 15, out);
-    quarter_round(1, 6, 11, 12, out);
-    quarter_round(2, 7, 8, 13, out);
-    quarter_round(3, 4, 9, 14, out);
-  }
+  run_rounds(out);
 
   if let Some(add) = add {
     // The original ChaCha20 algorithm adds the original state to the output of the rounds.
-    for i in 0..16 {
-      out[i] = out[i].wrapping_add(add[i]);
+    for (s1, s0) in out.iter_mut().zip(add.iter()) {
+      *s1 = s1.wrapping_add(*s0);
     }
   }
 }
 
-pub fn seek_keystream(state: &[u32; 16], n: u64) -> [u32; 16] {
+pub fn seek_keystream(state: &[u32; 16], n: u64, counter_size: usize) -> [u32; 16] {
   let mut state = state.clone();
-  safe_2words_counter_increment_n(&mut state[12..14], n);
-
   let mut keystream = state;
+
   chacha20_rounds(&mut keystream, Some(state));
 
+  match counter_size {
+    1 => safe_1word_counter_increment_n(&mut state[12], n as u32),
+    2 => safe_2words_counter_increment_n(&mut state[12..14], n),
+    _ => panic!("Invalid counter size"),
+  }
+
   keystream
+}
+
+/// XORs two 512-bit state arrays.
+/// This function modifies the first array in place.
+///
+/// # Arguments
+/// * `a` - A mutable reference to the first state array.
+/// * `b` - A reference to the second state array.
+///
+/// # Panics
+/// Panics if the two arrays are not of equal length.
+pub fn xor_bytes(left: &mut [u8], right: &[u8]) {
+  assert!(
+    right.len() >= left.len(),
+    "The left array can't be XORed completely with the right array"
+  );
+  left
+    .iter_mut()
+    .zip(right.iter())
+    .for_each(|(left, right)| *left ^= *right);
 }
 
 /// XORs two 512-bit state arrays.
@@ -121,6 +180,16 @@ pub fn safe_2words_counter_increment(counter: &mut [u32]) {
     assert!(!higher_overflow, "ChaCha20 block counter overflow");
     counter[1] = higher_word_increment;
   }
+}
+
+pub fn safe_1word_counter_increment_n(counter: &mut u32, n: u32) {
+  let (increment, overflow) = counter.overflowing_add(n as u32);
+
+  if overflow {
+    panic!("ChaCha20 block counter overflow");
+  }
+
+  *counter = counter.wrapping_add(n);
 }
 
 pub fn safe_2words_counter_increment_n(counter: &mut [u32], n: u64) {
@@ -187,4 +256,69 @@ pub fn u32_to_u8_vec(input: &[u32]) -> Vec<u8> {
     .into_iter()
     .flat_map(|value| value.to_le_bytes().to_vec())
     .collect()
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  #[test]
+  fn it_should_do_the_quarter_round() {
+    let mut state: [u32; STATE_WORDS] = [
+      0x879531e0, 0xc5ecf37d, 0x516461b1, 0xc9a62f8a, 0x44c20ef3, 0x3390af7f, 0xd9fc690b,
+      0x2a5f714c, 0x53372767, 0xb00a5631, 0x974c541a, 0x359e9963, 0x5c971061, 0x3d631689,
+      0x2098d9d6, 0x91dbd320,
+    ];
+
+    quarter_round(2, 7, 8, 13, &mut state);
+
+    assert_eq!(
+      state,
+      [
+        0x879531e0, 0xc5ecf37d, 0xbdb886dc, 0xc9a62f8a, 0x44c20ef3, 0x3390af7f, 0xd9fc690b,
+        0xcfacafd2, 0xe46bea80, 0xb00a5631, 0x974c541a, 0x359e9963, 0x5c971061, 0xccc07c79,
+        0x2098d9d6, 0x91dbd320,
+      ]
+    );
+  }
+
+  #[test]
+  fn it_runs_all_the_quarter_rounds() {
+    let mut state: [u32; 16] = [
+      0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, 0x03020100, 0x07060504, 0x0b0a0908,
+      0x0f0e0d0c, 0x13121110, 0x17161514, 0x1b1a1918, 0x1f1e1d1c, 0x00000001, 0x09000000,
+      0x4a000000, 0x00000000,
+    ];
+
+    run_rounds(&mut state);
+
+    assert_eq!(
+      state,
+      [
+        0x837778ab, 0xe238d763, 0xa67ae21e, 0x5950bb2f, 0xc4f2d0c7, 0xfc62bb2f, 0x8fa018fc,
+        0x3f5ec7b7, 0x335271c2, 0xf29489f3, 0xeabda8fc, 0x82e46ebd, 0xd19c12b4, 0xb04e16de,
+        0x9e83d0cb, 0x4e3c50a2,
+      ]
+    );
+  }
+
+  #[test]
+  fn it_executes_the_chacha20_permutation() {
+    let state: [u32; 16] = [
+      0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, 0x03020100, 0x07060504, 0x0b0a0908,
+      0x0f0e0d0c, 0x13121110, 0x17161514, 0x1b1a1918, 0x1f1e1d1c, 0x00000001, 0x09000000,
+      0x4a000000, 0x00000000,
+    ];
+
+    let result = permute(&state);
+
+    assert_eq!(
+      result,
+      [
+        0xe4e7f110, 0x15593bd1, 0x1fdd0f50, 0xc47120a3, 0xc7f4d1c7, 0x0368c033, 0x9aaa2204,
+        0x4e6cd4c3, 0x466482d2, 0x09aa9f07, 0x05d7c214, 0xa2028bd9, 0xd19c12b5, 0xb94e16de,
+        0xe883d0cb, 0x4e3c50a2,
+      ]
+    );
+  }
 }

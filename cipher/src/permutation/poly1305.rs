@@ -1,16 +1,26 @@
 use super::Permutation;
 
+/// Define the Poly1305 struct for the Poly1305 MAC algorithm.
 pub struct Poly1305 {
+  // r: 5-element array storing part of the key.
   r: [u32; 5],
-  h: [u32; 5],
+  // h: 5-element array, the internal state for the hash calculation.
+  h: [u32; 5],  
+  // pad: 4-element array storing the other part of the key.
   pad: [u32; 4],
 }
 
 impl Poly1305 {
+  /// Constructor for Poly1305.
+  /// Returns a new instance with default values.
   pub fn new() -> Self {
     Self::default()
   }
 
+  /// Computes a block of data for the MAC.
+  /// - `block`: A 16-byte array representing the data block to be processed.
+  /// - `partial`: A boolean indicating whether the block is a partial block (less than 16 bytes).
+  /// This method updates the internal state (`h`) based on the block data and the algorithm.
   fn compute_block(&mut self, block: [u8; 16], partial: bool) {
     let hibit = if partial { 0 } else { 1 << 24 };
 
@@ -95,6 +105,8 @@ impl Poly1305 {
     self.h[1] += c;
   }
 
+  /// Finalizes the MAC computation and returns the resulting tag.
+  /// This method completes the computation of the MAC and returns a 16-byte array representing the tag.
   fn finalize(&mut self) -> [u8; 16] {
     let mut c = self.h[1] >> 26;
     self.h[1] &= 0x3ff_ffff;
@@ -175,6 +187,14 @@ impl Poly1305 {
 }
 
 impl Permutation for Poly1305 {
+  /// Initializes the Poly1305 state with the given key.
+  /// 
+  /// # Arguments
+  /// - `key`: A byte slice containing the 32-byte key.
+  /// - `_iv`: An optional Initialization Vector, not used in Poly1305.
+  /// 
+  /// # Returns
+  /// Returns a mutable reference to the initialized Poly1305 instance.
   fn init(&mut self, key: &[u8], _iv: &[u8]) {
     self.r[0] = u32::from_le_bytes([key[0], key[1], key[2], key[3]]) & 0x3ff_ffff;
     self.r[1] = u32::from_le_bytes([key[3], key[4], key[5], key[6]]) & 0x3ff_ff03;
@@ -187,6 +207,13 @@ impl Permutation for Poly1305 {
     self.pad[3] = u32::from_le_bytes([key[28], key[29], key[30], key[31]]);
   }
 
+  /// Processes the given data and returns the computed MAC.
+  /// 
+  /// # Arguments
+  /// - `data`: A byte slice representing the data to be processed.
+  /// 
+  /// # Returns
+  /// Returns a Vec<u8> containing the MAC.
   fn process(&mut self, data: &[u8]) -> Vec<u8> {
     let mut blocks = data.chunks_exact(16);
     let partial = blocks.remainder();
@@ -206,6 +233,8 @@ impl Permutation for Poly1305 {
     self.finalize().to_vec()
   }
 
+  /// Clears the internal state of the Poly1305 instance.
+  /// This method resets `r`, `h`, and `pad` to zero, effectively clearing any data.
   fn clear(&mut self) {
     self.r = [0u32; 5];
     self.h = [0u32; 5];
@@ -220,5 +249,40 @@ impl Default for Poly1305 {
       h: [0u32; 5],
       pad: [0u32; 4],
     }
+  }
+}
+
+/// SignedEnvelope struct for handling data with its associated MAC.
+pub struct SignedEnvelope {
+  pub data: Vec<u8>,
+  pub mac: Vec<u8>,
+}
+
+impl SignedEnvelope {
+  /// Constructs a SignedEnvelope from a vector of bytes.
+  ///
+  /// # Arguments
+  ///  - `bytes`: Vec<u8> where the last 16 bytes are considered the MAC.
+  ///  - `mac`: Vec<u8> representing the MAC.
+  /// 
+  /// # Returns
+  /// Returns a new SignedEnvelope instance.
+  pub fn new(data: Vec<u8>, mac: Vec<u8>) -> Self {
+    Self { data, mac }
+  }
+}
+
+impl From<Vec<u8>> for SignedEnvelope {
+  fn from(bytes: Vec<u8>) -> Self {
+    let data = bytes[..bytes.len() - 16].to_vec();
+    let mac = bytes[bytes.len() - 16..].to_vec();
+
+    Self { data, mac }
+  }
+}
+
+impl From<SignedEnvelope> for Vec<u8> {
+  fn from(envelope: SignedEnvelope) -> Self {
+    [envelope.data, envelope.mac].concat()
   }
 }

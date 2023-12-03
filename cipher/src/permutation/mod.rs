@@ -9,6 +9,9 @@ pub mod poly1305;
 /// Re-exporting `ChaCha20` for direct use.
 pub use chacha20::ChaCha20;
 
+/// Re-exporting `Poly1305` for direct use.
+pub use poly1305::{Poly1305, SignedEnvelope};
+
 /// `Permutation` trait defines the common operations for permutation-based cryptographic algorithms.
 ///
 /// This trait provides the fundamental methods required for encryption and decryption processes

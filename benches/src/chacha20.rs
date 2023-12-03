@@ -1,10 +1,7 @@
 use criterion::{
   criterion_group, criterion_main, BenchmarkId, Criterion, PlotConfiguration, Throughput,
 };
-use secured_cipher::{
-  permutation::core::{CHACHA20_NONCE_SIZE, KEY_SIZE},
-  Cipher, CipherMode,
-};
+use secured_cipher::{permutation::chacha20::CHACHA20_NONCE_SIZE, Cipher, CipherMode};
 
 const KB: usize = 1024;
 const MB: usize = 1024 * KB;
@@ -14,17 +11,8 @@ fn bench(c: &mut Criterion) {
   let plot_config = PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
   group.plot_config(plot_config);
 
-  for size in &[
-    KB,
-    2 * KB,
-    4 * KB,
-    8 * KB,
-    16 * KB,
-    32 * KB,
-    64 * KB,
-    MB,
-  ] {
-    let key = [0u8; KEY_SIZE];
+  for size in &[KB, 2 * KB, 4 * KB, 8 * KB, 16 * KB, 32 * KB, 64 * KB, MB] {
+    let key = [0u8; 32];
     let iv = [1u8; CHACHA20_NONCE_SIZE];
 
     group.throughput(Throughput::Bytes(*size as u64));

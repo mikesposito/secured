@@ -1,9 +1,7 @@
-/// Core module containing essential cryptographic functionalities.
-pub mod core;
-
 /// Module for the ChaCha20 stream cipher algorithm.
 pub mod chacha20;
 
+/// Module for the Poly1305 message authentication code (MAC) algorithm.
 pub mod poly1305;
 
 /// Re-exporting `ChaCha20` for direct use.

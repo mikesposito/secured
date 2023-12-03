@@ -2,10 +2,10 @@ pub mod errors;
 
 pub use errors::EnclaveError;
 use secured_cipher::{
-  permutation::core::{CHACHA20_NONCE_SIZE, KEY_SIZE},
-  random_bytes, Cipher, SignedEnvelope,
+  permutation::chacha20::CHACHA20_NONCE_SIZE, random_bytes, Cipher, SignedEnvelope,
 };
 
+const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = CHACHA20_NONCE_SIZE;
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.

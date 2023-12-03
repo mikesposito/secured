@@ -1,6 +1,5 @@
-use crate::permutation::core::CHACHA20_NONCE_SIZE;
-
-use super::core::{permute, xor_bytes, Block, CONSTANTS, STATE_WORDS};
+mod core;
+pub use core::{CHACHA20_NONCE_SIZE, permute, xor_bytes, Block, CONSTANTS, STATE_WORDS};
 
 use super::Permutation;
 

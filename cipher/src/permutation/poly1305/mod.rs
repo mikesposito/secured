@@ -1,10 +1,10 @@
-use super::{
-  core::{
-    apply_poly1305_mod_p, apply_poly1305_pad, calculate_poly1305_d_values,
-    calculate_poly1305_h_values, finalize_poly1305_hash, poly1305_hash_to_tag,
-  },
-  Permutation,
+mod core;
+pub use core::{
+  apply_poly1305_mod_p, apply_poly1305_pad, calculate_poly1305_d_values,
+  calculate_poly1305_h_values, finalize_poly1305_hash, poly1305_hash_to_tag,
 };
+
+use super::Permutation;
 
 /// Define the Poly1305 struct for the Poly1305 MAC algorithm.
 pub struct Poly1305 {

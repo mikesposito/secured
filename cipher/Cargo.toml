@@ -1,6 +1,6 @@
 [package]
 name = "secured-cipher"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["mikesposito"]
 repository = "https://github.com/mikesposito/secured/"
 edition = "2021"

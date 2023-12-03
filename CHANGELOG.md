@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added
+- **BREAKING** Added `Poly1305` AEAD as default authentication algorithm used by `Enclave`
+
 ## [0.3.0]
 
 ### Changed
@@ -42,7 +47,8 @@ All notable changes to this project will be documented in this file.
 
 - Initial release
 
-[Unreleased]: https://github.com/mikesposito/secured/secured@0.3.0...HEAD
+[Unreleased]: https://github.com/mikesposito/secured/secured@0.4.0...HEAD
+[0.4.0]: https://github.com/mikesposito/secured/compare/secured@0.3.0...secured@0.4.0
 [0.3.0]: https://github.com/mikesposito/secured/compare/secured@0.2.0...secured@0.3.0
 [0.2.0]: https://github.com/mikesposito/secured/compare/secured@0.1.2...secured@0.2.0
 [0.1.2]: https://github.com/mikesposito/secured/compare/secured@0.1.1...secured@0.1.2

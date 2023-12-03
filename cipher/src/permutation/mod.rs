@@ -4,8 +4,13 @@ pub mod core;
 /// Module for the ChaCha20 stream cipher algorithm.
 pub mod chacha20;
 
+pub mod poly1305;
+
 /// Re-exporting `ChaCha20` for direct use.
 pub use chacha20::ChaCha20;
+
+/// Re-exporting `Poly1305` for direct use.
+pub use poly1305::{Poly1305, SignedEnvelope};
 
 /// `Permutation` trait defines the common operations for permutation-based cryptographic algorithms.
 ///

@@ -2,8 +2,8 @@ pub mod errors;
 
 pub use errors::EnclaveError;
 use secured_cipher::{
-  permutation::core::{KEY_SIZE, CHACHA20_NONCE_SIZE},
-  random_bytes, Cipher,
+  permutation::core::{CHACHA20_NONCE_SIZE, KEY_SIZE},
+  random_bytes, Cipher, SignedEnvelope,
 };
 
 const NONCE_SIZE: usize = CHACHA20_NONCE_SIZE;
@@ -27,7 +27,10 @@ pub struct Enclave<T> {
   nonce: [u8; NONCE_SIZE],
 }
 
-impl<T> Enclave<T> {
+impl<T> Enclave<T>
+where
+  T: TryFrom<Vec<u8>> + Into<Vec<u8>> + Clone,
+{
   /// Creates a new `Enclave` instance from unencrypted data.
   ///
   /// # Arguments
@@ -43,11 +46,17 @@ impl<T> Enclave<T> {
     plain_bytes: Vec<u8>,
   ) -> Result<Self, String> {
     let nonce = random_bytes::<NONCE_SIZE>();
-    let encrypted_bytes = Cipher::default().init(&key, &nonce).encrypt(&plain_bytes);
+    let mut cipher = Cipher::default();
+    cipher.init(&key, &nonce);
+
+    let encrypted_bytes = cipher.encrypt(&plain_bytes);
+    let envelope: Vec<u8> = cipher
+      .sign(&metadata.clone().into(), &encrypted_bytes)
+      .into();
 
     Ok(Enclave {
       metadata,
-      encrypted_bytes: encrypted_bytes.into_boxed_slice(),
+      encrypted_bytes: envelope.into_boxed_slice(),
       nonce,
     })
   }
@@ -60,10 +69,13 @@ impl<T> Enclave<T> {
   /// # Returns
   /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
   pub fn decrypt(&self, key: [u8; KEY_SIZE]) -> Result<Vec<u8>, String> {
+    let envelope = SignedEnvelope::from(self.encrypted_bytes.to_vec());
+
     Ok(
       Cipher::default()
         .init(&key, &self.nonce)
-        .decrypt(&self.encrypted_bytes),
+        .decrypt_and_verify(&envelope)
+        .or(Err("decryption failed".to_string()))?,
     )
   }
 }
@@ -154,10 +166,10 @@ mod tests {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
 
-      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes);
+      let safe = Enclave::from_plain_bytes(b"metadata".to_owned(), key.pubk, bytes);
 
       assert!(safe.is_ok());
-      assert_eq!(safe.unwrap().metadata, "metadata");
+      assert_eq!(safe.unwrap().metadata, b"metadata".to_owned());
     }
   }
 
@@ -168,7 +180,7 @@ mod tests {
     fn it_should_decrypt_enclave() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key.pubk, bytes.clone()).unwrap();
 
       let decrypted_bytes = safe.decrypt(key.pubk);
 
@@ -180,12 +192,12 @@ mod tests {
     fn it_should_fail_with_wrong_key() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key.pubk, bytes.clone()).unwrap();
       let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
 
-      let decrypted_bytes = safe.decrypt(wrong_key.pubk).unwrap();
+      let decrypted_bytes = safe.decrypt(wrong_key.pubk);
 
-      assert_ne!(decrypted_bytes, bytes);
+      assert!(!decrypted_bytes.is_ok());
     }
 
     #[test]

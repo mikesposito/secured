@@ -7,7 +7,7 @@ Secured is a versatile Rust package that provides robust encryption and decrypti
 
 ## Features
 
-- **Encryption and Decryption**: Easily encrypt and decrypt files with password, using [the `ChaCha20` algorithm](cipher/src/permutation/chacha20.rs).
+- **Encryption and Decryption**: Easily encrypt and decrypt files with password, using [the `ChaCha20` and `Poly1305` algorithms combined](cipher/README.md).
 - **Cli & Library**: Use as a standalone CLI tool or integrate as a library in your Rust applications.
 
 ## Installation
@@ -58,9 +58,12 @@ fn main() {
    // Key generation (32bytes for the key, 16 bytes for salt)
    let key = Key::<32, 16>::new(b"my password", 900_000); // 900K rounds
 
+   // Leave some readable metadata (but signed!)
+   let metadata = b"some metadata".to_vec();
+
    // Using Enclave for data encapsulation (&str metadata, 8-byte nonce)
    let enclave =
-      Enclave::from_plain_bytes("Some metadata", key.pubk, b"Some bytes to encrypt".to_vec())
+      Enclave::from_plain_bytes(metadata, key.pubk, b"Some bytes to encrypt".to_vec())
          .unwrap();
 
    // Get encrypted bytes (ciphertext)
@@ -73,7 +76,7 @@ fn main() {
 }
 ```
 
-See [package documentation](https://docs.rs/secured/0.1.1/) for more information
+See [package documentation](https://docs.rs/secured/0.3.0/) for more information
 
 ## Contributing
 

@@ -41,7 +41,8 @@ pub use cipher;
 ///     let key: Key<32, 16> = Key::new(b"my password", 1_000);
 ///
 ///     // Encrypt data: Utilize the Enclave to securely encrypt data along with metadata.
-///     let enclave = Enclave::from_plain_bytes("some metadata", key.pubk, b"some bytes to encrypt".to_vec()).unwrap();
+///     let metadata = b"some metadata".to_vec();
+///     let enclave = Enclave::from_plain_bytes(metadata, key.pubk, b"some bytes to encrypt".to_vec()).unwrap();
 ///   
 ///     // Decrypt data: Recover the original bytes from the encrypted enclave.
 ///     let recovered_bytes = enclave.decrypt(key.pubk);

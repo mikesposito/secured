@@ -34,11 +34,21 @@
 //! let mut cipher = Cipher::default();
 //! cipher.init(&key, &nonce);
 //!
+//! // Encrypt and decrypt
 //! let encrypted_data = cipher.encrypt(data);
-//! println!("Encrypted data: {:?}", encrypted_data);
-//!
 //! let decrypted_data = cipher.decrypt(&encrypted_data);
-//! println!("Decrypted data: {:?}", decrypted_data);
+//!
+//! // Sign - the secret evelope contains the encrypted data and its MAC (message authentication code)
+//! let signed_secret_envelope = cipher.sign(b"your readable header", &encrypted_data);
+//!
+//! // Decrypt and verify - the verified decrypted data is returned if the MAC is valid
+//! let verified_decrypted_data = cipher.decrypt_and_verify(&signed_secret_envelope);
+//!
+//! // if the MAC is invalid, the decryption will fail
+//! let is_decryption_ok = verified_decrypted_data.is_ok();
+//!
+//! println!("Decrypted and verified data: {:?}", verified_decrypted_data.unwrap());
+//! 
 //! ```
 //!
 //! ## Modules
@@ -141,13 +151,27 @@ impl Cipher {
   }
 
   /// Decrypts the provided data.
+  /// Note that this method does not provide any integrity checks. Most of the
+  /// use cases should be covered by `decrypt_and_verify()` instead.
+  ///
+  /// # Arguments
+  /// * `data` - A slice of data to be decrypted.
+  ///
+  /// # Returns
+  /// Decrypted data as a vector of bytes (`Bytes`).
+  pub fn decrypt(&mut self, data: &[u8]) -> Vec<u8> {
+    // Decrypt the data using the ChaCha20 permutation
+    self.permutation.process(&data)
+  }
+
+  /// Decrypts the provided data and verifies the MAC.
   ///
   /// # Arguments
   /// * `envelope` - A signed envelope containing encrypted data to be decrypted.
   ///
   /// # Returns
   /// Decrypted data as a vector of bytes (`Bytes`), or an error in case of decryption failure.
-  pub fn decrypt(&mut self, envelope: &SignedEnvelope) -> Result<Vec<u8>, CipherError> {
+  pub fn decrypt_and_verify(&mut self, envelope: &SignedEnvelope) -> Result<Vec<u8>, CipherError> {
     // Check the MAC (message authentication code) to ensure the integrity of the data
     if envelope.mac
       != self

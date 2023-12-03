@@ -1,4 +1,10 @@
-use super::Permutation;
+use super::{
+  core::{
+    apply_poly1305_mod_p, apply_poly1305_pad, calculate_poly1305_d_values,
+    calculate_poly1305_h_values, finalize_poly1305_hash, poly1305_hash_to_tag,
+  },
+  Permutation,
+};
 
 /// Define the Poly1305 struct for the Poly1305 MAC algorithm.
 pub struct Poly1305 {
@@ -11,190 +17,83 @@ pub struct Poly1305 {
 }
 
 impl Poly1305 {
-  /// Constructor for Poly1305.
-  /// Returns a new instance with default values.
+  /// Creates a new instance of Poly1305.
+  ///
+  /// This constructor initializes a new Poly1305 instance with default values.
+  /// It is typically used to start a new message authentication code (MAC) computation.
+  ///
+  /// # Returns
+  /// A new instance of `Poly1305`.
   pub fn new() -> Self {
     Self::default()
   }
 
   /// Computes a block of data for the MAC.
-  /// - `block`: A 16-byte array representing the data block to be processed.
-  /// - `partial`: A boolean indicating whether the block is a partial block (less than 16 bytes).
-  /// This method updates the internal state (`h`) based on the block data and the algorithm.
+  ///
+  /// This method processes a 16-byte block of data and updates the internal state
+  /// (`h`) based on the block data and the Poly1305 algorithm. It handles both full
+  /// and partial blocks, where a partial block is less than 16 bytes.
+  ///
+  /// # Arguments
+  /// * `block` - A 16-byte array representing the data block to be processed.
+  /// * `partial` - A boolean indicating whether the block is a partial block.
+  ///
+  /// # Notes
+  /// Partial blocks are handled differently in the algorithm, as indicated by the `partial` flag.
   fn compute_block(&mut self, block: [u8; 16], partial: bool) {
     let hibit = if partial { 0 } else { 1 << 24 };
 
-    let r0 = self.r[0];
-    let r1 = self.r[1];
-    let r2 = self.r[2];
-    let r3 = self.r[3];
-    let r4 = self.r[4];
-
-    let s1 = r1 * 5;
-    let s2 = r2 * 5;
-    let s3 = r3 * 5;
-    let s4 = r4 * 5;
+    let (r0, r1, r2, r3, r4) = (self.r[0], self.r[1], self.r[2], self.r[3], self.r[4]);
+    let (s1, s2, s3, s4) = (r1 * 5, r2 * 5, r3 * 5, r4 * 5);
 
     // h += m
-    let h0 =
-      self.h[0].wrapping_add(u32::from_le_bytes(block[0..4].try_into().unwrap())) & 0x3ff_ffff;
-    let h1 =
-      self.h[1].wrapping_add(u32::from_le_bytes(block[3..7].try_into().unwrap()) >> 2) & 0x3ff_ffff;
-    let h2 = self.h[2].wrapping_add(u32::from_le_bytes(block[6..10].try_into().unwrap()) >> 4)
-      & 0x3ff_ffff;
-    let h3 = self.h[3].wrapping_add(u32::from_le_bytes(block[9..13].try_into().unwrap()) >> 6)
-      & 0x3ff_ffff;
-    let h4 =
-      self.h[4].wrapping_add(u32::from_le_bytes(block[12..16].try_into().unwrap()) >> 8) | hibit;
+    let (h0, h1, h2, h3, h4) = calculate_poly1305_h_values(&block, hibit);
 
     // h *= r
-
-    let d0 = h0 as u64 * r0 as u64
-      + h1 as u64 * s4 as u64
-      + h2 as u64 * s3 as u64
-      + h3 as u64 * s2 as u64
-      + h4 as u64 * s1 as u64;
-
-    let mut d1 = h0 as u64 * r1 as u64
-      + h1 as u64 * r0 as u64
-      + h2 as u64 * s4 as u64
-      + h3 as u64 * s3 as u64
-      + h4 as u64 * s2 as u64;
-
-    let mut d2 = h0 as u64 * r2 as u64
-      + h1 as u64 * r1 as u64
-      + h2 as u64 * r0 as u64
-      + h3 as u64 * s4 as u64
-      + h4 as u64 * s3 as u64;
-
-    let mut d3 = h0 as u64 * r3 as u64
-      + h1 as u64 * r2 as u64
-      + h2 as u64 * r1 as u64
-      + h3 as u64 * r0 as u64
-      + h4 as u64 * s4 as u64;
-
-    let mut d4 = h0 as u64 * r4 as u64
-      + h1 as u64 * r3 as u64
-      + h2 as u64 * r2 as u64
-      + h3 as u64 * r1 as u64
-      + h4 as u64 * r0 as u64;
+    let (mut d0, mut d1, mut d2, mut d3, mut d4) =
+      calculate_poly1305_d_values(h0, h1, h2, h3, h4, r0, r1, r2, r3, r4, s1, s2, s3, s4);
 
     // (partial) h %= p
-    let mut c = (d0 >> 26) as u32;
-    self.h[0] = d0 as u32 & 0x3ff_ffff;
-    d1 += c as u64;
-
-    c = (d1 >> 26) as u32;
-    self.h[1] = d1 as u32 & 0x3ff_ffff;
-    d2 += c as u64;
-
-    c = (d2 >> 26) as u32;
-    self.h[2] = d2 as u32 & 0x3ff_ffff;
-    d3 += c as u64;
-
-    c = (d3 >> 26) as u32;
-    self.h[3] = d3 as u32 & 0x3ff_ffff;
-    d4 += c as u64;
-
-    c = (d4 >> 26) as u32;
-    self.h[4] = d4 as u32 & 0x3ff_ffff;
-    self.h[0] += c * 5;
-
-    c = (self.h[0] >> 26) as u32;
-    self.h[0] &= 0x3ff_ffff;
-    self.h[1] += c;
+    apply_poly1305_mod_p(&mut self.h, &mut d0, &mut d1, &mut d2, &mut d3, &mut d4)
   }
 
   /// Finalizes the MAC computation and returns the resulting tag.
-  /// This method completes the computation of the MAC and returns a 16-byte array representing the tag.
+  ///
+  /// This method completes the Poly1305 MAC computation by finalizing the hash calculation,
+  /// applying the pad, and then converting the final hash state into a 16-byte tag.
+  ///
+  /// It should be called after all blocks of data have been processed using `compute_block`.
+  ///
+  /// # Returns
+  /// A 16-byte array representing the final MAC tag.
   fn finalize(&mut self) -> [u8; 16] {
-    let mut c = self.h[1] >> 26;
-    self.h[1] &= 0x3ff_ffff;
-    self.h[2] += c;
+    // Finalize the hash calculation
+    finalize_poly1305_hash(&mut self.h);
 
-    c = self.h[2] >> 26;
-    self.h[2] &= 0x3ff_ffff;
-    self.h[3] += c;
+    // Apply the padding to the hash
+    apply_poly1305_pad(&mut self.h, self.pad);
 
-    c = self.h[3] >> 26;
-    self.h[3] &= 0x3ff_ffff;
-    self.h[4] += c;
-
-    c = self.h[4] >> 26;
-    self.h[4] &= 0x3ff_ffff;
-    self.h[0] += c * 5;
-
-    c = self.h[0] >> 26;
-    self.h[0] &= 0x3ff_ffff;
-    self.h[1] += c;
-
-    let mut g0 = self.h[0].wrapping_add(5);
-    c = g0 >> 26;
-    g0 &= 0x3ff_ffff;
-
-    let mut g1 = self.h[1].wrapping_add(c);
-    c = g1 >> 26;
-    g1 &= 0x3ff_ffff;
-
-    let mut g2 = self.h[2].wrapping_add(c);
-    c = g2 >> 26;
-    g2 &= 0x3ff_ffff;
-
-    let mut g3 = self.h[3].wrapping_add(c);
-    c = g3 >> 26;
-    g3 &= 0x3ff_ffff;
-
-    let mut g4 = self.h[4].wrapping_add(c).wrapping_sub(1 << 26);
-
-    let mut mask = (g4 >> 31 - 1).wrapping_sub(1);
-    g0 &= mask;
-    g1 &= mask;
-    g2 &= mask;
-    g3 &= mask;
-    g4 &= mask;
-    mask = !mask;
-    self.h[0] = (self.h[0] & mask) | g0;
-    self.h[1] = (self.h[1] & mask) | g1;
-    self.h[2] = (self.h[2] & mask) | g2;
-    self.h[3] = (self.h[3] & mask) | g3;
-    self.h[4] = (self.h[4] & mask) | g4;
-
-    self.h[0] |= self.h[1] << 26;
-    self.h[1] = (self.h[1] >> 6) | (self.h[2] << 20);
-    self.h[2] = (self.h[2] >> 12) | (self.h[3] << 14);
-    self.h[3] = (self.h[3] >> 18) | (self.h[4] << 8);
-
-    let mut f: u64 = self.h[0] as u64 + self.pad[0] as u64;
-    self.h[0] = f as u32;
-
-    f = self.h[1] as u64 + self.pad[1] as u64 + (f >> 32);
-    self.h[1] = f as u32;
-
-    f = self.h[2] as u64 + self.pad[2] as u64 + (f >> 32);
-    self.h[2] = f as u32;
-
-    f = self.h[3] as u64 + self.pad[3] as u64 + (f >> 32);
-    self.h[3] = f as u32;
-
-    let mut tag = [0u8; 16];
-    tag[0..4].copy_from_slice(&self.h[0].to_le_bytes());
-    tag[4..8].copy_from_slice(&self.h[1].to_le_bytes());
-    tag[8..12].copy_from_slice(&self.h[2].to_le_bytes());
-    tag[12..16].copy_from_slice(&self.h[3].to_le_bytes());
-
-    tag
+    // Convert the hash to a tag
+    poly1305_hash_to_tag(&self.h)
   }
 }
 
 impl Permutation for Poly1305 {
   /// Initializes the Poly1305 state with the given key.
   ///
+  /// This method sets up the Poly1305 state using a 32-byte key. The key is split
+  /// into two parts: the `r` array (for the algorithm's internal state) and the `pad`
+  /// (used in the final computation steps).
+  ///
   /// # Arguments
-  /// - `key`: A byte slice containing the 32-byte key.
-  /// - `_iv`: An optional Initialization Vector, not used in Poly1305.
+  /// * `key` - A byte slice containing the 32-byte key.
+  /// * `_iv` - An optional Initialization Vector, not used in Poly1305.
   ///
   /// # Returns
-  /// Returns a mutable reference to the initialized Poly1305 instance.
+  /// A mutable reference to the initialized Poly1305 instance.
+  ///
+  /// # Notes
+  /// The Initialization Vector (`_iv`) is not used in Poly1305 and can be passed as an empty slice.
   fn init(&mut self, key: &[u8], _iv: &[u8]) {
     self.r[0] = u32::from_le_bytes([key[0], key[1], key[2], key[3]]) & 0x3ff_ffff;
     self.r[1] = u32::from_le_bytes([key[3], key[4], key[5], key[6]]) & 0x3ff_ff03;
@@ -207,13 +106,17 @@ impl Permutation for Poly1305 {
     self.pad[3] = u32::from_le_bytes([key[28], key[29], key[30], key[31]]);
   }
 
-  /// Processes the given data and returns the computed MAC.
+  /// Processes the given data and computes the MAC.
+  ///
+  /// This method processes the input data in 16-byte blocks to compute the
+  /// message authentication code (MAC). If the data does not divide evenly into
+  /// 16-byte blocks, the final block is padded as necessary.
   ///
   /// # Arguments
-  /// - `data`: A byte slice representing the data to be processed.
+  /// * `data` - A byte slice representing the data to be processed.
   ///
   /// # Returns
-  /// Returns a Vec<u8> containing the MAC.
+  /// A vector of bytes (`Vec<u8>`) containing the computed MAC.
   fn process(&mut self, data: &[u8]) -> Vec<u8> {
     let mut blocks = data.chunks_exact(16);
     let partial = blocks.remainder();
@@ -234,7 +137,10 @@ impl Permutation for Poly1305 {
   }
 
   /// Clears the internal state of the Poly1305 instance.
-  /// This method resets `r`, `h`, and `pad` to zero, effectively clearing any data.
+  ///
+  /// This method resets the internal state variables (`r`, `h`, and `pad`) to zero.
+  /// It is useful for security purposes when the MAC computation is complete and
+  /// the instance needs to be cleared before being reused or discarded.
   fn clear(&mut self) {
     self.r = [0u32; 5];
     self.h = [0u32; 5];
@@ -275,10 +181,27 @@ impl SignedEnvelope {
 
 impl From<Vec<u8>> for SignedEnvelope {
   fn from(bytes: Vec<u8>) -> Self {
-    let header_length = bytes[0] as usize;
-    let header = bytes[1..header_length + 1].to_vec();
-    let data = bytes[..bytes.len() - 16].to_vec();
-    let mac = bytes[bytes.len() - 16..].to_vec();
+    let mut offset = 0;
+
+    // Deserialize header
+    let header_len = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    let header = bytes[offset..offset + header_len].to_vec();
+
+    // Deserialize data
+    offset += header_len;
+    let data_len = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    let data = bytes[offset..offset + data_len].to_vec();
+
+    // Deserialize MAC
+    offset += data_len;
+    let mac = bytes[offset..offset + 16].to_vec();
+
+    // If the MAC length is not 16, return an error
+    if mac.len() != 16 {
+      panic!("Unexpected bytes length");
+    }
 
     Self::new(header, data, mac)
   }
@@ -286,12 +209,21 @@ impl From<Vec<u8>> for SignedEnvelope {
 
 impl From<SignedEnvelope> for Vec<u8> {
   fn from(envelope: SignedEnvelope) -> Self {
-    [
-      vec![envelope.header.len() as u8],
-      envelope.header,
-      envelope.data,
-      envelope.mac,
-    ]
-    .concat()
+    let mut bytes = Vec::new();
+
+    // Serialize the header length and data
+    // Network Byte Order is used
+    bytes.extend(&(envelope.header.len() as u32).to_be_bytes());
+    bytes.extend(&envelope.header);
+
+    // Serialize the data length and data
+    // Network Byte Order is used
+    bytes.extend(&(envelope.data.len() as u32).to_be_bytes());
+    bytes.extend(&envelope.data);
+
+    // Serialize the MAC
+    bytes.extend(&envelope.mac);
+
+    bytes
   }
 }

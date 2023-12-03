@@ -74,7 +74,7 @@ where
     Ok(
       Cipher::default()
         .init(&key, &self.nonce)
-        .decrypt(&envelope)
+        .decrypt_and_verify(&envelope)
         .or(Err("decryption failed".to_string()))?,
     )
   }

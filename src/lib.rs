@@ -10,12 +10,10 @@ pub use cipher;
 ///
 /// ## Features
 /// - **ChaCha20**: A high-level struct for the ChaCha20 cipher algorithm, offering encryption and decryption functionalities.
-/// - **ChaChaStream**: A core struct that manages the internal state and operations of the ChaCha20 cipher, providing lower-level control.
-/// - **ChaCha20Poly1305Cipher**: Implements the combined ChaCha20 and Poly1305 encryption and decryption algorithm for authenticated encryption.
+/// - **Poly1305**: An implementation of the Poly1305 message authentication code (MAC) algorithm, used for data integrity verification.
 /// - **Key**: Manages cryptographic keys, enabling creation and derivation of keys from passwords, ensuring secure key management.
 /// - **Enclave**: A secure container for encrypted data, paired with unencrypted metadata, providing a convenient and safe way to handle sensitive information.
 /// - **Cipher**: A trait defining a standard interface for cryptographic operations like encryption and decryption.
-/// - **Custom Error Handling**: Offers custom error types tailored to encryption processes, enhancing error reporting and handling in cryptographic operations.
 ///
 /// ## Getting Started
 ///
@@ -26,7 +24,7 @@ pub use cipher;
 /// To use `secured` in your project, add it as a dependency in your `Cargo.toml` file:
 /// ```toml
 /// [dependencies]
-/// secured = "0.1.2" // Use the latest version available
+/// secured = "0.3.0" // Use the latest version available
 /// ```
 ///
 /// ### Basic Usage

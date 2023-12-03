@@ -5,7 +5,7 @@ pub struct Poly1305 {
   // r: 5-element array storing part of the key.
   r: [u32; 5],
   // h: 5-element array, the internal state for the hash calculation.
-  h: [u32; 5],  
+  h: [u32; 5],
   // pad: 4-element array storing the other part of the key.
   pad: [u32; 4],
 }
@@ -188,11 +188,11 @@ impl Poly1305 {
 
 impl Permutation for Poly1305 {
   /// Initializes the Poly1305 state with the given key.
-  /// 
+  ///
   /// # Arguments
   /// - `key`: A byte slice containing the 32-byte key.
   /// - `_iv`: An optional Initialization Vector, not used in Poly1305.
-  /// 
+  ///
   /// # Returns
   /// Returns a mutable reference to the initialized Poly1305 instance.
   fn init(&mut self, key: &[u8], _iv: &[u8]) {
@@ -208,10 +208,10 @@ impl Permutation for Poly1305 {
   }
 
   /// Processes the given data and returns the computed MAC.
-  /// 
+  ///
   /// # Arguments
   /// - `data`: A byte slice representing the data to be processed.
-  /// 
+  ///
   /// # Returns
   /// Returns a Vec<u8> containing the MAC.
   fn process(&mut self, data: &[u8]) -> Vec<u8> {
@@ -254,6 +254,7 @@ impl Default for Poly1305 {
 
 /// SignedEnvelope struct for handling data with its associated MAC.
 pub struct SignedEnvelope {
+  pub header: Vec<u8>,
   pub data: Vec<u8>,
   pub mac: Vec<u8>,
 }
@@ -264,25 +265,33 @@ impl SignedEnvelope {
   /// # Arguments
   ///  - `bytes`: Vec<u8> where the last 16 bytes are considered the MAC.
   ///  - `mac`: Vec<u8> representing the MAC.
-  /// 
+  ///
   /// # Returns
   /// Returns a new SignedEnvelope instance.
-  pub fn new(data: Vec<u8>, mac: Vec<u8>) -> Self {
-    Self { data, mac }
+  pub fn new(header: Vec<u8>, data: Vec<u8>, mac: Vec<u8>) -> Self {
+    Self { header, data, mac }
   }
 }
 
 impl From<Vec<u8>> for SignedEnvelope {
   fn from(bytes: Vec<u8>) -> Self {
+    let header_length = bytes[0] as usize;
+    let header = bytes[1..header_length + 1].to_vec();
     let data = bytes[..bytes.len() - 16].to_vec();
     let mac = bytes[bytes.len() - 16..].to_vec();
 
-    Self { data, mac }
+    Self::new(header, data, mac)
   }
 }
 
 impl From<SignedEnvelope> for Vec<u8> {
   fn from(envelope: SignedEnvelope) -> Self {
-    [envelope.data, envelope.mac].concat()
+    [
+      vec![envelope.header.len() as u8],
+      envelope.header,
+      envelope.data,
+      envelope.mac,
+    ]
+    .concat()
   }
 }

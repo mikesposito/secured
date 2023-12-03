@@ -123,14 +123,18 @@ impl Cipher {
   /// Signs the provided data.
   ///
   /// # Arguments
+  /// * `header` - A slice of unencrypted data to be signed.
   /// * `data` - A slice of data to be signed.
   ///
   /// # Returns
   /// A signed envelope containing the data and its MAC (message authentication code).
-  pub fn sign(&mut self, data: &[u8]) -> SignedEnvelope {
-    let mac = self.aead.process(data);
+  pub fn sign(&mut self, header: &[u8], data: &[u8]) -> SignedEnvelope {
+    let mac = self
+      .aead
+      .process(&[header.to_vec(), data.to_vec()].concat());
 
     SignedEnvelope {
+      header: header.to_vec(),
       data: data.into(),
       mac,
     }
@@ -145,7 +149,11 @@ impl Cipher {
   /// Decrypted data as a vector of bytes (`Bytes`), or an error in case of decryption failure.
   pub fn decrypt(&mut self, envelope: &SignedEnvelope) -> Result<Vec<u8>, CipherError> {
     // Check the MAC (message authentication code) to ensure the integrity of the data
-    if envelope.mac != self.aead.process(&envelope.data) {
+    if envelope.mac
+      != self
+        .aead
+        .process(&[envelope.header.clone(), envelope.data.clone()].concat())
+    {
       return Err(CipherError::AuthenticationFailed);
     }
 

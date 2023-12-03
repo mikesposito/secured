@@ -51,7 +51,7 @@ where
 
     let encrypted_bytes = cipher.encrypt(&plain_bytes);
     let envelope: Vec<u8> = cipher
-      .sign([metadata.clone().into(), encrypted_bytes].concat().as_slice())
+      .sign(&metadata.clone().into(), &encrypted_bytes)
       .into();
 
     Ok(Enclave {

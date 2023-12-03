@@ -144,7 +144,7 @@ impl Poly1305 {
     c = g3 >> 26;
     g3 &= 0x3ff_ffff;
 
-    let mut g4 = self.h[4].wrapping_add(c).wrapping_sub((1 << 26));
+    let mut g4 = self.h[4].wrapping_add(c).wrapping_sub(1 << 26);
 
     let mut mask = (g4 >> 31 - 1).wrapping_sub(1);
     g0 &= mask;

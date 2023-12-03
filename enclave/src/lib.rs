@@ -29,7 +29,7 @@ pub struct Enclave<T> {
 
 impl<T> Enclave<T>
 where
-  T: TryFrom<Vec<u8>> + Into<Vec<u8>> + Copy,
+  T: TryFrom<Vec<u8>> + Into<Vec<u8>> + Clone,
 {
   /// Creates a new `Enclave` instance from unencrypted data.
   ///
@@ -51,7 +51,7 @@ where
 
     let encrypted_bytes = cipher.encrypt(&plain_bytes);
     let envelope: Vec<u8> = cipher
-      .sign([metadata.into(), encrypted_bytes].concat().as_slice())
+      .sign([metadata.clone().into(), encrypted_bytes].concat().as_slice())
       .into();
 
     Ok(Enclave {
@@ -180,7 +180,7 @@ mod tests {
     fn it_should_decrypt_enclave() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key.pubk, bytes.clone()).unwrap();
 
       let decrypted_bytes = safe.decrypt(key.pubk);
 
@@ -192,7 +192,7 @@ mod tests {
     fn it_should_fail_with_wrong_key() {
       let key: Key<32, 16> = Key::new(b"my password", 10_000);
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes("metadata", key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key.pubk, bytes.clone()).unwrap();
       let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
 
       let decrypted_bytes = safe.decrypt(wrong_key.pubk);

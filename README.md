@@ -50,33 +50,27 @@ Secured is straightforward to use from the command line. Here are the basic comm
 
 To use Secured as a library in your Rust application, simply import the package and utilize its encryption and decryption functions as per your requirements.
 
+#### Encrypting Data
+
 ```rust
-use secured::enclave::Enclave;
-use secured::cipher::Key;
+use secured_enclave::{Enclave, Encryptable, KeyDerivationStrategy};
 
-fn main() {
-   // Key generation (32bytes for the key, 16 bytes for salt)
-   let key = Key::<32, 16>::new(b"my password", 900_000); // 900K rounds
-
-   // Leave some readable metadata (but signed!)
-   let metadata = b"some metadata".to_vec();
-
-   // Using Enclave for data encapsulation (&str metadata, 8-byte nonce)
-   let enclave =
-      Enclave::from_plain_bytes(metadata, key.pubk, b"Some bytes to encrypt".to_vec())
-         .unwrap();
-
-   // Get encrypted bytes (ciphertext)
-   println!("Encrypted bytes: {:?}", enclave.encrypted_bytes);
-
-   // Decrypt Enclave
-   let decrypted_bytes = enclave.decrypt(key.pubk).unwrap();
-
-   assert_eq!(decrypted_bytes, b"Some bytes to encrypt");
-}
+let password = "strong_password";
+let encrypted_string = "Hello, world!".encrypt(password.to_string(), KeyDerivationStrategy::default());
 ```
 
-See [package documentation](https://docs.rs/secured/0.3.0/) for more information
+#### Decrypting Data
+
+```rust
+use secured_enclave::{Decryptable, EnclaveError};
+
+let password = "strong_password";
+let decrypted_result = encrypted_data.decrypt(password.to_string());
+
+println!("Decrypted data: {:?}", String::from_utf8(decrypted_data).unwrap())
+```
+
+See [Enclave documentation](enclave/README.md) for more advanced usage
 
 ## Contributing
 

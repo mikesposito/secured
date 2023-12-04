@@ -48,7 +48,7 @@
 //! let is_decryption_ok = verified_decrypted_data.is_ok();
 //!
 //! println!("Decrypted and verified data: {:?}", verified_decrypted_data.unwrap());
-//! 
+//!
 //! ```
 //!
 //! ## Modules
@@ -58,7 +58,7 @@
 
 pub mod permutation;
 
-pub use secured_cipher_key::{random_bytes, Key};
+pub use secured_cipher_key::{random_bytes, Key, KeyDerivationStrategy};
 
 pub use permutation::{ChaCha20, Permutation, Poly1305, SignedEnvelope};
 

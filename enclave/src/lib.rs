@@ -1,8 +1,12 @@
 pub mod errors;
+pub mod traits;
 
 pub use errors::EnclaveError;
-use secured_cipher::{
-  permutation::chacha20::CHACHA20_NONCE_SIZE, random_bytes, Cipher, SignedEnvelope,
+pub use traits::{Decryptable, Encryptable};
+
+pub use secured_cipher::{
+  permutation::chacha20::CHACHA20_NONCE_SIZE, random_bytes, Cipher, Key, KeyDerivationStrategy,
+  SignedEnvelope,
 };
 
 const KEY_SIZE: usize = 32;
@@ -68,14 +72,13 @@ where
   ///
   /// # Returns
   /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
-  pub fn decrypt(&self, key: [u8; KEY_SIZE]) -> Result<Vec<u8>, String> {
+  pub fn decrypt(&self, key: [u8; KEY_SIZE]) -> Result<Vec<u8>, EnclaveError> {
     let envelope = SignedEnvelope::from(self.encrypted_bytes.to_vec());
 
     Ok(
       Cipher::default()
         .init(&key, &self.nonce)
-        .decrypt_and_verify(&envelope)
-        .or(Err("decryption failed".to_string()))?,
+        .decrypt_and_verify(&envelope)?,
     )
   }
 }
@@ -153,20 +156,274 @@ where
   }
 }
 
+impl Encryptable<KEY_SIZE> for Vec<u8> {
+  /// Encrypts a vector of bytes using a provided password.
+  ///
+  /// # Arguments
+  /// * `password`: The password to use for key derivation.
+  /// * `strategy`: The key derivation strategy to use.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt(&self, password: String, strategy: KeyDerivationStrategy) -> Vec<u8> {
+    let key: Key<32, 16> = Key::new(password.as_bytes(), strategy.clone());
+    let enclave = Enclave::from_plain_bytes(vec![], key.pubk, self.clone()).unwrap();
+
+    [enclave.into(), key.salt.to_vec(), strategy.into()].concat()
+  }
+
+  /// Encrypts a vector of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    let enclave = Enclave::from_plain_bytes(vec![], key, self.clone()).unwrap();
+    enclave.into()
+  }
+
+  /// Encrypts a vector of bytes using a provided key and metadata.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  /// * `metadata`: The metadata to be associated with the encrypted data.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_metadata<M>(&self, key: [u8; KEY_SIZE], metadata: M) -> Vec<u8>
+  where
+    M: From<Vec<u8>> + Into<Vec<u8>> + Clone,
+  {
+    let enclave = Enclave::from_plain_bytes(metadata, key, self.clone()).unwrap();
+    enclave.into()
+  }
+}
+
+impl Decryptable<KEY_SIZE> for Vec<u8> {
+  /// Decrypts a slice of bytes using a provided password.
+  ///
+  /// # Arguments
+  /// * `password`: The password to use for decryption.
+  ///
+  /// # Returns
+  /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
+  fn decrypt(&self, password: String) -> Result<Vec<u8>, EnclaveError> {
+    let strategy = KeyDerivationStrategy::try_from(self[self.len() - 9..self.len()].to_vec())?;
+    let salt: [u8; 16] = self[self.len() - 25..self.len() - 9].try_into().unwrap();
+    let key = Key::<KEY_SIZE, 16>::with_salt(password.as_bytes(), salt, strategy);
+
+    let enclave = Enclave::<Vec<u8>>::try_from(self[..self.len() - 25].to_vec())?;
+
+    enclave.decrypt(key.pubk)
+  }
+
+  /// Decrypts a slice of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for decryption.
+  ///
+  /// # Returns
+  /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
+  fn decrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Result<Vec<u8>, EnclaveError> {
+    let enclave = Enclave::<Vec<u8>>::try_from(self.clone())?;
+    enclave.decrypt(key)
+  }
+
+  /// Decrypts a slice of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for decryption.
+  ///
+  /// # Returns
+  /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
+  fn decrypt_with_metadata<M>(&self, key: [u8; KEY_SIZE]) -> Result<(Vec<u8>, M), EnclaveError>
+  where
+    M: TryFrom<Vec<u8>> + Into<Vec<u8>> + Clone,
+  {
+    let enclave = Enclave::<M>::try_from(self.clone())?;
+    let decrypted_bytes = enclave.decrypt(key)?;
+    Ok((decrypted_bytes, enclave.metadata))
+  }
+}
+
+impl Decryptable<KEY_SIZE> for &[u8] {
+  /// Decrypts a slice of bytes using a provided password.
+  ///
+  /// # Arguments
+  /// * `password`: The password to use for decryption.
+  ///
+  /// # Returns
+  /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
+  fn decrypt(&self, password: String) -> Result<Vec<u8>, EnclaveError> {
+    self.to_vec().decrypt(password)
+  }
+
+  /// Decrypts a slice of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for decryption.
+  ///
+  /// # Returns
+  /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
+  fn decrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Result<Vec<u8>, EnclaveError> {
+    self.to_vec().decrypt_with_key(key)
+  }
+
+  /// Decrypts a slice of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for decryption.
+  ///
+  /// # Returns
+  /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
+  fn decrypt_with_metadata<M>(&self, key: [u8; KEY_SIZE]) -> Result<(Vec<u8>, M), EnclaveError>
+  where
+    M: TryFrom<Vec<u8>> + Into<Vec<u8>> + Clone,
+  {
+    self.to_vec().decrypt_with_metadata(key)
+  }
+}
+
+impl Encryptable<KEY_SIZE> for &[u8] {
+  /// Encrypts a slice of bytes using a provided password.
+  ///
+  /// # Arguments
+  /// * `password`: The password to use for key derivation.
+  /// * `strategy`: The key derivation strategy to use.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt(&self, password: String, strategy: KeyDerivationStrategy) -> Vec<u8> {
+    self.to_vec().encrypt(password, strategy)
+  }
+
+  /// Encrypts a slice of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    self.to_vec().encrypt_with_key(key)
+  }
+
+  /// Encrypts a slice of bytes using a provided key and metadata.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  /// * `metadata`: The metadata to be associated with the encrypted data.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_metadata<M>(&self, key: [u8; KEY_SIZE], metadata: M) -> Vec<u8>
+  where
+    M: From<Vec<u8>> + Into<Vec<u8>> + Clone,
+  {
+    self.to_vec().encrypt_with_metadata(key, metadata)
+  }
+}
+
+impl Encryptable<KEY_SIZE> for String {
+  /// Encrypts a string using a provided password.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  /// * `strategy`: The key derivation strategy to use.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt(&self, password: String, strategy: KeyDerivationStrategy) -> Vec<u8> {
+    self.as_bytes().to_vec().encrypt(password, strategy)
+  }
+
+  /// Encrypts a String using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    self.as_bytes().to_vec().encrypt_with_key(key)
+  }
+
+  /// Encrypts a String using a provided key and metadata.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  /// * `metadata`: The metadata to be associated with the encrypted data.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_metadata<M>(&self, key: [u8; KEY_SIZE], metadata: M) -> Vec<u8>
+  where
+    M: From<Vec<u8>> + Into<Vec<u8>> + Clone,
+  {
+    self
+      .as_bytes()
+      .to_vec()
+      .encrypt_with_metadata(key, metadata)
+  }
+}
+
+impl Encryptable<KEY_SIZE> for &str {
+  /// Encrypts a &str using a provided password.
+  ///
+  /// # Arguments
+  /// * `password`: The password to use for key derivation.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt(&self, password: String, strategy: KeyDerivationStrategy) -> Vec<u8> {
+    self.as_bytes().to_vec().encrypt(password, strategy)
+  }
+
+  /// Encrypts a string using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    self.as_bytes().to_vec().encrypt_with_key(key)
+  }
+
+  /// Encrypts an &str using a provided key and metadata.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  /// * `metadata`: The metadata to be associated with the encrypted data.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_metadata<M>(&self, key: [u8; KEY_SIZE], metadata: M) -> Vec<u8>
+  where
+    M: From<Vec<u8>> + Into<Vec<u8>> + Clone,
+  {
+    self
+      .as_bytes()
+      .to_vec()
+      .encrypt_with_metadata(key, metadata)
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use secured_cipher::Key;
 
   mod from_plain_bytes {
     use super::*;
 
     #[test]
     fn it_should_create_enclave() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
 
-      let safe = Enclave::from_plain_bytes(b"metadata".to_owned(), key.pubk, bytes);
+      let safe = Enclave::from_plain_bytes(b"metadata".to_owned(), key, bytes);
 
       assert!(safe.is_ok());
       assert_eq!(safe.unwrap().metadata, b"metadata".to_owned());
@@ -178,11 +435,11 @@ mod tests {
 
     #[test]
     fn it_should_decrypt_enclave() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key.pubk, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key, bytes.clone()).unwrap();
 
-      let decrypted_bytes = safe.decrypt(key.pubk);
+      let decrypted_bytes = safe.decrypt(key);
 
       assert!(decrypted_bytes.is_ok());
       assert_eq!(decrypted_bytes.unwrap(), bytes);
@@ -190,26 +447,76 @@ mod tests {
 
     #[test]
     fn it_should_fail_with_wrong_key() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key.pubk, bytes.clone()).unwrap();
-      let wrong_key: Key<32, 16> = Key::new(b"my wrong password", 10_000);
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key, bytes.clone()).unwrap();
+      let wrong_key = [1u8; KEY_SIZE];
 
-      let decrypted_bytes = safe.decrypt(wrong_key.pubk);
+      let decrypted_bytes = safe.decrypt(wrong_key);
 
       assert!(!decrypted_bytes.is_ok());
     }
 
     #[test]
     fn it_should_serialize_and_deserialize_to_bytes() {
-      let key: Key<32, 16> = Key::new(b"my password", 10_000);
+      let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let enclave = Enclave::from_plain_bytes([0_u8, 1_u8], key.pubk, bytes.clone()).unwrap();
+      let enclave = Enclave::from_plain_bytes([0_u8, 1_u8], key, bytes.clone()).unwrap();
 
       let serialized: Vec<u8> = enclave.clone().into();
       let deserialized = Enclave::try_from(serialized).unwrap();
 
       assert_eq!(enclave, deserialized);
+    }
+
+    #[test]
+    fn vec_u8_should_be_encryptable_and_decryptable_with_password() {
+      let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
+      let password = "my password".to_string();
+
+      // Using a low number of iterations here because tests are slow
+      let encrypted_bytes = bytes.encrypt(password.clone(), KeyDerivationStrategy::PBKDF2(10_000));
+      let decrypted_bytes = encrypted_bytes.decrypt(password);
+
+      assert!(decrypted_bytes.is_ok());
+      assert_eq!(decrypted_bytes.unwrap(), bytes);
+    }
+
+    #[test]
+    fn vec_u8_should_be_encryptable_and_decryptable_with_key() {
+      let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
+      let key = [0u8; KEY_SIZE];
+
+      let encrypted_bytes = bytes.encrypt_with_key(key);
+      let decrypted_bytes = encrypted_bytes.decrypt_with_key(key);
+
+      assert!(decrypted_bytes.is_ok());
+      assert_eq!(decrypted_bytes.unwrap(), bytes);
+    }
+
+    #[test]
+    fn vec_u8_should_be_encryptable_and_decryptable_with_metadata() {
+      let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
+      let key = [0u8; KEY_SIZE];
+
+      let encrypted_bytes = bytes.encrypt_with_metadata(key, b"metadata".to_vec());
+      let decrypted_bytes = encrypted_bytes.decrypt_with_metadata::<Vec<u8>>(key);
+
+      assert!(decrypted_bytes.is_ok());
+      assert_eq!(decrypted_bytes.unwrap(), (bytes, b"metadata".to_vec()));
+    }
+
+    #[test]
+    fn strings_should_be_encryptable_and_decryptable_with_password() {
+      let string = "my string".to_string();
+      let password = "my password".to_string();
+
+      // Using a low number of iterations here because tests are slow
+      let encrypted_bytes = string.encrypt(password.clone(), KeyDerivationStrategy::PBKDF2(10_000));
+      let decrypted_bytes = encrypted_bytes.decrypt(password);
+
+      assert!(decrypted_bytes.is_ok());
+      assert_eq!(decrypted_bytes.unwrap(), string.as_bytes());
     }
   }
 }

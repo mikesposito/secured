@@ -3,8 +3,8 @@ use rpassword::prompt_password;
 use std::fs::{metadata, File};
 use std::io::{Read, Write};
 
-use cipher::Key;
-use enclave::Enclave;
+use cipher::KeyDerivationStrategy;
+use enclave::{Decryptable, Encryptable};
 
 /// Defines command line subcommands for the application.
 #[derive(Debug, Subcommand)]
@@ -56,14 +56,8 @@ fn main() {
 /// * `password` - The password used for encryption.
 /// * `filename` - The name of the file to be encrypted.
 fn encrypt_file(password: &String, filename: &String) {
-  let encryption_key: Key<32, 16> = Key::new(password.as_bytes(), 900_000);
-  let enclave = Enclave::from_plain_bytes(
-    encryption_key.salt,
-    encryption_key.pubk,
-    get_file_as_byte_vec(filename),
-  )
-  .unwrap();
-  let encrypted_bytes: Vec<u8> = enclave.into();
+  let encrypted_bytes =
+    get_file_as_byte_vec(filename).encrypt(password.clone(), KeyDerivationStrategy::default());
 
   File::create(format!("{}.secured", filename))
     .expect("Unable to create file")
@@ -79,11 +73,8 @@ fn encrypt_file(password: &String, filename: &String) {
 /// * `password` - The password used for decryption.
 /// * `filename` - The name of the file to be decrypted.
 fn decrypt_file(password: &String, filename: &String) {
-  let encrypted_bytes = get_file_as_byte_vec(filename);
-  let enclave = Enclave::try_from(encrypted_bytes).expect("Unable to deserialize enclave");
-  let encryption_key: Key<32, 16> = Key::with_salt(password.as_bytes(), enclave.metadata, 900_000);
-  let recovered_bytes = enclave
-    .decrypt(encryption_key.pubk)
+  let recovered_bytes = get_file_as_byte_vec(filename)
+    .decrypt(password.clone())
     .expect("Wrong password or corrupted enclave");
 
   File::create(filename.replace(".secured", ""))

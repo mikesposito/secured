@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use rpassword::prompt_password;
 use std::fs::{metadata, File};
 use std::io::{Read, Write};
+use std::process::exit;
 
 use cipher::KeyDerivationStrategy;
 use enclave::{Decryptable, Encryptable};
@@ -64,7 +65,7 @@ fn encrypt_file(password: &String, filename: &String) {
     .write_all(&encrypted_bytes)
     .expect("Unable to write data");
 
-  println!("Wrote encrypted file to {}.secured", filename);
+  println!("🔐 > Wrote encrypted file to {}.secured", filename);
 }
 
 /// Decrypts a file with a given password.
@@ -73,18 +74,21 @@ fn encrypt_file(password: &String, filename: &String) {
 /// * `password` - The password used for decryption.
 /// * `filename` - The name of the file to be decrypted.
 fn decrypt_file(password: &String, filename: &String) {
-  let recovered_bytes = get_file_as_byte_vec(filename)
-    .decrypt(password.clone())
-    .expect("Wrong password or corrupted enclave");
+  let recovered_bytes = get_file_as_byte_vec(filename).decrypt(password.clone());
+
+  if recovered_bytes.is_err() {
+    println!("❌ > Unable to decrypt file");
+    exit(1);
+  }
 
   File::create(filename.replace(".secured", ""))
     .expect("Unable to create file")
-    .write_all(&recovered_bytes)
+    .write_all(&recovered_bytes.unwrap())
     .expect("Unable to write data");
 
   println!(
-    "Wrote decrypted file to {}",
-    filename.replace(".enclave", "")
+    "✅ > Wrote decrypted file to {}",
+    filename.replace(".secured", "")
   );
 }
 

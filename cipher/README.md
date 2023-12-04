@@ -41,5 +41,5 @@ Add `secured-cipher` to your Cargo.toml:
 
 ```toml
 [dependencies]
-secured-cipher = "~0.2.0"
+secured-cipher = "~0.3.1"
 ```

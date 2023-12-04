@@ -1,6 +1,6 @@
 [package]
 name = "secured-cipher"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["mikesposito"]
 repository = "https://github.com/mikesposito/secured/"
 edition = "2021"
@@ -10,4 +10,4 @@ description = "Pure Rust implementation of the ChaCha cipher family"
 [dependencies.secured-cipher-key]
 package = "secured-cipher-key"
 path = "./key"
-version = "0.1.0"
+version = "0.2.0"

@@ -31,19 +31,17 @@ pub use cipher;
 /// Here's a quick example to illustrate basic usage of the `secured` library:
 ///
 /// ```rust
-/// use secured::{enclave::Enclave, cipher::Key};
+/// use secured::enclave::{Encryptable, Decryptable, KeyDerivationStrategy};
 ///
 /// fn main() {
-///     // Key generation: Create a new cryptographic key using a password and iteration count.
-///     // Note: In a production environment, ensure to use a higher iteration count for added security.
-///     let key: Key<32, 16> = Key::new(b"my password", 1_000);
-///
-///     // Encrypt data: Utilize the Enclave to securely encrypt data along with metadata.
-///     let metadata = b"some metadata".to_vec();
-///     let enclave = Enclave::from_plain_bytes(metadata, key.pubk, b"some bytes to encrypt".to_vec()).unwrap();
+///     // Encrypt whatever: strings, bytes, etc.
+///     let password = "my password".to_string();
+///     let encrypted_bytes = "Hello, world!".encrypt(password, KeyDerivationStrategy::default());
 ///   
-///     // Decrypt data: Recover the original bytes from the encrypted enclave.
-///     let recovered_bytes = enclave.decrypt(key.pubk);
+///     // Decrypt data: Recover the original bytes from the encrypted bytes.
+///     let recovered_data = encrypted_bytes.decrypt("my password".to_string());
+/// 
+///     assert_eq!(recovered_data.unwrap(), "Hello, world!".as_bytes().to_vec());
 /// }
 /// ```
 ///

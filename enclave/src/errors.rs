@@ -15,7 +15,7 @@ impl Display for EnclaveError {
       EnclaveError::Serialization(message) => write!(f, "Unable to serialize safe > {}", message),
       EnclaveError::Deserialization(message) => {
         write!(f, "Unable to deserialize safe > {}", message)
-      },
+      }
       EnclaveError::Generic(message) => write!(f, "Enclave error > {}", message),
     }
   }

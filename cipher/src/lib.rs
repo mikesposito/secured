@@ -48,7 +48,7 @@
 //! let is_decryption_ok = verified_decrypted_data.is_ok();
 //!
 //! println!("Decrypted and verified data: {:?}", verified_decrypted_data.unwrap());
-//! 
+//!
 //! ```
 //!
 //! ## Modules

@@ -1,5 +1,5 @@
 mod core;
-pub use core::{CHACHA20_NONCE_SIZE, permute, xor_bytes, Block, CONSTANTS, STATE_WORDS};
+pub use core::{permute, xor_bytes, Block, CHACHA20_NONCE_SIZE, CONSTANTS, STATE_WORDS};
 
 use super::Permutation;
 
@@ -37,10 +37,10 @@ impl ChaCha20 {
   /// # Example
   /// ```
   /// use secured_cipher::{ChaCha20, Permutation};
-  /// 
+  ///
   /// let mut chacha20 = ChaCha20::new();
   /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
-  /// 
+  ///
   /// let keystream_block = chacha20.next_keystream();
   /// // `keystream_block` now contains the next 64 bytes of the keystream
   /// ```
@@ -135,10 +135,10 @@ impl Permutation for ChaCha20 {
   /// # Example
   /// ```
   /// use secured_cipher::{ChaCha20, Permutation};
-  /// 
+  ///
   /// let mut chacha20 = ChaCha20::new();
   /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
-  /// 
+  ///
   /// let data = b"some plaintext data"; // Data to be encrypted or decrypted
   /// let processed_data = chacha20.process(data);
   /// // `processed_data` now contains the encrypted or decrypted output

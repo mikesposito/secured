@@ -40,7 +40,7 @@ pub use cipher;
 ///   
 ///     // Decrypt data: Recover the original bytes from the encrypted bytes.
 ///     let recovered_data = encrypted_bytes.decrypt("my password".to_string());
-/// 
+///
 ///     assert_eq!(recovered_data.unwrap(), "Hello, world!".as_bytes().to_vec());
 /// }
 /// ```

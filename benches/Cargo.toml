@@ -16,3 +16,6 @@ secured-cipher = { path = "../cipher/" }
 name = "chacha20"
 path = "src/chacha20.rs"
 harness = false
+
+[profile.bench]
+debug = true

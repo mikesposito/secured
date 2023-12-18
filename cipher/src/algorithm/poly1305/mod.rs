@@ -4,9 +4,12 @@ pub use core::{
   calculate_poly1305_h_values, finalize_poly1305_hash, poly1305_hash_to_tag,
 };
 
-use super::Permutation;
+use crate::AEADAlgorithm;
+
+use super::{AlgorithmKeyInit, AlgorithmProcess};
 
 /// Define the Poly1305 struct for the Poly1305 MAC algorithm.
+#[derive(Default)]
 pub struct Poly1305 {
   // r: 5-element array storing part of the key.
   r: [u32; 5],
@@ -78,7 +81,7 @@ impl Poly1305 {
   }
 }
 
-impl Permutation for Poly1305 {
+impl AlgorithmKeyInit for Poly1305 {
   /// Initializes the Poly1305 state with the given key.
   ///
   /// This method sets up the Poly1305 state using a 32-byte key. The key is split
@@ -94,7 +97,7 @@ impl Permutation for Poly1305 {
   ///
   /// # Notes
   /// The Initialization Vector (`_iv`) is not used in Poly1305 and can be passed as an empty slice.
-  fn init(&mut self, key: &[u8], _iv: &[u8]) {
+  fn init(&mut self, key: &[u8]) {
     self.r[0] = u32::from_le_bytes([key[0], key[1], key[2], key[3]]) & 0x3ff_ffff;
     self.r[1] = u32::from_le_bytes([key[3], key[4], key[5], key[6]]) & 0x3ff_ff03;
     self.r[2] = u32::from_le_bytes([key[6], key[7], key[8], key[9]]) & 0x3ff_c0ff;
@@ -105,7 +108,9 @@ impl Permutation for Poly1305 {
     self.pad[2] = u32::from_le_bytes([key[24], key[25], key[26], key[27]]);
     self.pad[3] = u32::from_le_bytes([key[28], key[29], key[30], key[31]]);
   }
+}
 
+impl AlgorithmProcess for Poly1305 {
   /// Processes the given data and computes the MAC.
   ///
   /// This method processes the input data in 16-byte blocks to compute the
@@ -118,10 +123,10 @@ impl Permutation for Poly1305 {
   /// # Returns
   /// A vector of bytes (`Vec<u8>`) containing the computed MAC.
   fn process(&mut self, data: &[u8]) -> Vec<u8> {
-    let mut blocks = data.chunks_exact(16);
+    let blocks = data.chunks_exact(16);
     let partial = blocks.remainder();
 
-    while let Some(block) = blocks.next() {
+    for block in blocks {
       self.compute_block(block.try_into().unwrap(), false);
     }
 
@@ -135,28 +140,9 @@ impl Permutation for Poly1305 {
 
     self.finalize().to_vec()
   }
-
-  /// Clears the internal state of the Poly1305 instance.
-  ///
-  /// This method resets the internal state variables (`r`, `h`, and `pad`) to zero.
-  /// It is useful for security purposes when the MAC computation is complete and
-  /// the instance needs to be cleared before being reused or discarded.
-  fn clear(&mut self) {
-    self.r = [0u32; 5];
-    self.h = [0u32; 5];
-    self.pad = [0u32; 4];
-  }
 }
 
-impl Default for Poly1305 {
-  fn default() -> Self {
-    Self {
-      r: [0u32; 5],
-      h: [0u32; 5],
-      pad: [0u32; 4],
-    }
-  }
-}
+impl AEADAlgorithm for Poly1305 {}
 
 /// SignedEnvelope struct for handling data with its associated MAC.
 pub struct SignedEnvelope {

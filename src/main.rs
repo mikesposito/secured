@@ -100,8 +100,8 @@ fn decrypt_file(password: &String, filename: &String) {
 /// # Returns
 /// A `Vec<u8>` containing the contents of the file.
 fn get_file_as_byte_vec(filename: &String) -> Vec<u8> {
-  let mut f = File::open(&filename).expect("no file found");
-  let metadata = metadata(&filename).expect("unable to read metadata");
+  let mut f = File::open(filename).expect("no file found");
+  let metadata = metadata(filename).expect("unable to read metadata");
   let mut buffer = vec![0; metadata.len() as usize];
   f.read(&mut buffer).expect("buffer overflow");
 

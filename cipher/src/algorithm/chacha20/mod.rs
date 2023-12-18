@@ -1,9 +1,14 @@
 mod core;
 pub use core::{permute, xor_bytes, Block, CHACHA20_NONCE_SIZE, CONSTANTS, STATE_WORDS};
 
-use super::Permutation;
+use crate::EncryptionAlgorithm;
+
+use super::{AlgorithmKeyIVInit, AlgorithmProcess, AlgorithmProcessInPlace};
+
+use rayon::prelude::*;
 
 /// The `ChaCha20` struct represents the ChaCha20 stream cipher.
+#[derive(Clone)]
 pub struct ChaCha20 {
   state: Block,
 }
@@ -36,7 +41,7 @@ impl ChaCha20 {
   ///
   /// # Example
   /// ```
-  /// use secured_cipher::{ChaCha20, Permutation};
+  /// use secured_cipher::{ChaCha20, AlgorithmKeyIVInit};
   ///
   /// let mut chacha20 = ChaCha20::new();
   /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
@@ -70,9 +75,29 @@ impl ChaCha20 {
     // Return the generated 64-byte keystream block
     keystream
   }
+
+  pub fn keystream_at(&self, counter: u32) -> [u8; 64] {
+    // Initialize an array to hold the keystream
+    let mut keystream = [0u8; 64];
+
+    // Set the block counter to the provided value
+    let mut state = self.state;
+    state[12] = counter;
+
+    // Perform the ChaCha20 permutation on the current state
+    let block = permute(&state);
+
+    // Convert the 32-bit words from the permuted block into bytes and copy them into the keystream
+    for (bytes, word) in keystream.chunks_exact_mut(4).zip(block) {
+      bytes.copy_from_slice(&word.to_le_bytes());
+    }
+
+    // Return the generated 64-byte keystream block
+    keystream
+  }
 }
 
-impl Permutation for ChaCha20 {
+impl AlgorithmKeyIVInit for ChaCha20 {
   /// Initializes the ChaCha20 cipher with a given key and IV (initialization vector).
   ///
   /// This method sets up the cipher's internal state which includes the ChaCha20 constants, the provided key,
@@ -108,7 +133,9 @@ impl Permutation for ChaCha20 {
       *val = u32::from_le_bytes(chunk.try_into().unwrap());
     }
   }
+}
 
+impl AlgorithmProcess for ChaCha20 {
   /// Processes input data using the ChaCha20 cipher algorithm.
   ///
   /// This function applies the ChaCha20 encryption or decryption process to the given input bytes.
@@ -123,18 +150,9 @@ impl Permutation for ChaCha20 {
   /// # Returns
   /// A `Vec<u8>` containing the processed data (encrypted or decrypted).
   ///
-  /// # Behavior
-  /// The function divides the input data into 64-byte blocks. For each block, it generates a unique
-  /// keystream using the `next_keystream` method. Each block of the input data is then XORed with its
-  /// corresponding keystream block. This method ensures that each block is encrypted or decrypted
-  /// with a different keystream, which is essential for the security of the cipher.
-  ///
-  /// After processing all blocks, the function clears the internal state to prevent any residual
-  /// sensitive data from remaining in memory.
-  ///
   /// # Example
   /// ```
-  /// use secured_cipher::{ChaCha20, Permutation};
+  /// use secured_cipher::{ChaCha20, algorithm::{AlgorithmKeyIVInit, AlgorithmProcess}};
   ///
   /// let mut chacha20 = ChaCha20::new();
   /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
@@ -152,26 +170,49 @@ impl Permutation for ChaCha20 {
     let mut out = bytes_in.to_owned();
 
     // Process each 64-byte block of the input data
-    out.chunks_mut(64).for_each(|plain_chunk| {
-      // Generate the keystream for the current block
-      let keystream = self.next_keystream();
-      // XOR the block with the keystream to perform encryption/decryption
-      xor_bytes(plain_chunk, &keystream);
-    });
-
-    // Clear the internal state after processing to maintain security
-    self.clear();
+    out
+      .par_chunks_mut(64 * 100)
+      .enumerate()
+      .for_each(|(i, par_chunk)| {
+        par_chunk.chunks_mut(64).enumerate().for_each(|(j, chunk)| {
+          // Generate the keystream for the current block
+          let keystream = self.keystream_at(((i * 100) + j + 1) as u32);
+          // XOR the block with the keystream to perform encryption/decryption
+          xor_bytes(chunk, &keystream);
+        });
+      });
 
     // Return the processed data
     out.to_vec()
   }
+}
 
-  /// Clears the internal counter of the cipher.
-  fn clear(&mut self) {
-    // Reset the block counter
-    self.state[12] = 1;
+impl AlgorithmProcessInPlace for ChaCha20 {
+  /// Processes input data using the ChaCha20 cipher algorithm.
+  ///
+  /// This function applies the ChaCha20 encryption or decryption process to the given input bytes.
+  ///
+  /// # Arguments
+  /// * `bytes` - A slice of bytes representing the input data to be processed (either plaintext for encryption
+  ///  or ciphertext for decryption).
+  fn process_in_place(&self, bytes: &mut [u8]) {
+    // Process 6.4 kilobytes per thread
+    bytes
+      .par_chunks_mut(64 * 100)
+      .enumerate()
+      .for_each(|(i, par_chunk)| {
+        // Process each 64-byte block of the input data
+        par_chunk.chunks_mut(64).enumerate().for_each(|(j, chunk)| {
+          // Generate the keystream for the current block
+          let keystream = self.keystream_at(((i * 100) + j + 1) as u32);
+          // XOR the block with the keystream to perform encryption/decryption
+          xor_bytes(chunk, &keystream);
+        });
+      });
   }
 }
+
+impl EncryptionAlgorithm for ChaCha20 {}
 
 #[cfg(test)]
 mod tests {
@@ -276,5 +317,20 @@ mod tests {
     let decrypted_data = chacha20.process(&encrypted_data);
 
     assert_eq!(decrypted_data, data);
+  }
+
+  #[test]
+  fn it_process_in_place_as_expected() {
+    let mut chacha20_1 = ChaCha20::new();
+    chacha20_1.init(&[0u8; 32], &[0u8; CHACHA20_NONCE_SIZE]);
+    let mut chacha20_2 = ChaCha20::new();
+    chacha20_2.init(&[0u8; 32], &[0u8; CHACHA20_NONCE_SIZE]);
+    let mut data = [0u8; 64 * 1000];
+    let data2 = data.clone();
+
+    chacha20_1.process_in_place(&mut data);
+    let encrypted_sync = chacha20_2.process(&data2);
+
+    assert_eq!(data.to_vec(), encrypted_sync);
   }
 }

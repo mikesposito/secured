@@ -31,3 +31,6 @@ version = "^7.3.1"
 [[bin]]
 name = "secured"
 path = "src/main.rs"
+
+[profile.bench]
+debug = true

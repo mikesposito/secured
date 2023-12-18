@@ -36,14 +36,10 @@ fn bench(c: &mut Criterion) {
     let mut chacha20 = ChaCha20::new();
     chacha20.init(&key, &iv);
 
-    group.bench_with_input(
-      BenchmarkId::new("process", size),
-      size,
-      |b, &_size| {
-        let mut bytes = vec![0u8; *size];
-        b.iter(|| chacha20.process_in_place(&mut bytes));
-      },
-    );
+    group.bench_with_input(BenchmarkId::new("process", size), size, |b, &_size| {
+      let mut bytes = vec![0u8; *size];
+      b.iter(|| chacha20.process_in_place(&mut bytes));
+    });
 
     group.bench_with_input(
       BenchmarkId::new("process_in_place", size),

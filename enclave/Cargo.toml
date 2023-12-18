@@ -1,6 +1,6 @@
 [package]
 name = "secured-enclave"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["mikesposito"]
 edition = "2021"
 license = "MIT"
@@ -8,5 +8,5 @@ repository = "https://github.com/mikesposito/secured/"
 description = "Ergonomic library for secure encryption and decryption of data in Rust."
 
 [dependencies.secured-cipher]
-version = "0.3.1"
+version = "0.4.0"
 path = "../cipher"

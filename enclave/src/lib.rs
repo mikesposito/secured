@@ -5,7 +5,7 @@ pub use errors::EnclaveError;
 pub use traits::{Decryptable, Encryptable};
 
 pub use secured_cipher::{
-  permutation::chacha20::CHACHA20_NONCE_SIZE, random_bytes, Cipher, Key, KeyDerivationStrategy,
+  algorithm::chacha20::CHACHA20_NONCE_SIZE, random_bytes, Cipher, Key, KeyDerivationStrategy,
   SignedEnvelope,
 };
 

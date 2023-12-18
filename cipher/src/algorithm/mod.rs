@@ -10,12 +10,8 @@ pub use chacha20::ChaCha20;
 /// Re-exporting `Poly1305` for direct use.
 pub use poly1305::{Poly1305, SignedEnvelope};
 
-/// `Permutation` trait defines the common operations for permutation-based cryptographic algorithms.
-///
-/// This trait provides the fundamental methods required for encryption and decryption processes
-/// in ciphers like ChaCha20 and XChaCha20.
-pub trait Permutation {
-  /// Initializes the permutation with a key and an initialization vector (IV).
+pub trait AlgorithmKeyIVInit {
+  /// Initializes the algorithm with a key and an initialization vector (IV).
   ///
   /// This method sets up the internal state of the cipher using the provided key and IV,
   /// preparing it for either encryption or decryption.
@@ -24,7 +20,20 @@ pub trait Permutation {
   /// * `key` - A byte slice representing the cryptographic key.
   /// * `iv` - A byte slice representing the initialization vector.
   fn init(&mut self, key: &[u8], iv: &[u8]);
+}
 
+pub trait AlgorithmKeyInit {
+  /// Initializes the algorithm with a key.
+  ///
+  /// This method sets up the internal state of the cipher using the provided key,
+  /// preparing it for either encryption or decryption.
+  ///
+  /// # Arguments
+  /// * `key` - A byte slice representing the cryptographic key.
+  fn init(&mut self, key: &[u8]);
+}
+
+pub trait AlgorithmProcess {
   /// Processes the provided data (either encrypts or decrypts, depending on the implementation).
   ///
   /// This method applies the cipher's permutation logic to the provided data, returning the
@@ -36,10 +45,22 @@ pub trait Permutation {
   /// # Returns
   /// A vector of bytes representing the processed data.
   fn process(&mut self, data: &[u8]) -> Vec<u8>;
-
-  /// Clears the internal state of the cipher.
-  ///
-  /// This method is used to reset the cipher's state, ensuring that no sensitive information
-  /// is left in memory after the cryptographic operations are complete.
-  fn clear(&mut self);
 }
+
+pub trait AlgorithmProcessInPlace {
+  /// Processes the provided data (either encrypts or decrypts, depending on the implementation).
+  ///
+  /// This method applies the cipher's permutation logic to the provided data, returning the
+  /// processed data as a new vector of bytes.
+  ///
+  /// # Arguments
+  /// * `data` - A byte slice of data to be processed (encrypted or decrypted).
+  ///
+  /// # Returns
+  /// A vector of bytes representing the processed data.
+  fn process_in_place(&self, data: &mut [u8]);
+}
+
+pub trait EncryptionAlgorithm: AlgorithmKeyIVInit + AlgorithmProcess {}
+
+pub trait AEADAlgorithm: AlgorithmKeyInit + AlgorithmProcess {}

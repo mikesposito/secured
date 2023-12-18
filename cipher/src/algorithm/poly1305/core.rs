@@ -130,7 +130,7 @@ pub fn apply_poly1305_mod_p(
   hash[4] = (*d4 as u32) & 0x3ff_ffff;
   hash[0] += c * 5;
 
-  c = (hash[0] >> 26) as u32;
+  c = hash[0] >> 26;
   hash[0] &= 0x3ff_ffff;
   hash[1] += c;
 }
@@ -181,7 +181,7 @@ pub fn finalize_poly1305_hash(hash: &mut [u32; 5]) {
 
   let mut g4 = hash[4].wrapping_add(c).wrapping_sub(1 << 26);
 
-  let mut mask = (g4 >> 31 - 1).wrapping_sub(1);
+  let mut mask = (g4 >> (31 - 1)).wrapping_sub(1);
   g0 &= mask;
   g1 &= mask;
   g2 &= mask;

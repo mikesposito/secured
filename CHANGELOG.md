@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `process_in_line` to `AlgorithmProcessInLine` trait
+
+### Changed
+- Blocks are now computed in parallel
+- `permutation` module has been changed to `algorithm`
+- `Permutation` trait has been decomposed in multiple `Algorithm*` trait
+
+### Removed
+- `clear` function from chacha20 and poly1305
+
 ## [0.5.0]
 
 ### Added

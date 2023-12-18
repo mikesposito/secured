@@ -62,7 +62,7 @@ pub fn quarter_round(a: usize, b: usize, c: usize, d: usize, state: &mut Block) 
 
 /// Runs the ChaCha20 permutation on the provided state.
 pub fn permute(state: &Block) -> Block {
-  let mut block = state.clone();
+  let mut block = *state;
 
   // The ChaCha20 permutation consists of 20 rounds of quarter round operations.
   run_rounds(&mut block);

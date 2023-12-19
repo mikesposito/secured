@@ -1,4 +1,4 @@
-use secured_cipher::KeyDerivationStrategy;
+use secured_cipher::{Key, KeyDerivationStrategy};
 
 use crate::EnclaveError;
 
@@ -15,7 +15,9 @@ use crate::EnclaveError;
 pub trait Encryptable<const KEY_SIZE: usize> {
   fn encrypt(&self, password: String, strategy: KeyDerivationStrategy) -> Vec<u8>;
 
-  fn encrypt_with_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8>;
+  fn encrypt_with_key(&self, key: &Key<KEY_SIZE, 16>) -> Vec<u8>;
+
+  fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8>;
 
   fn encrypt_with_metadata<T>(&self, key: [u8; KEY_SIZE], metadata: T) -> Vec<u8>
   where

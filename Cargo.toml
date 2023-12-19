@@ -28,6 +28,15 @@ features = ["derive"]
 [dependencies.rpassword]
 version = "^7.3.1"
 
+[dependencies.glob]
+version = "^0.3.0"
+
+[dependencies.indicatif]
+version = "^0.17.0"
+
+[dependencies.hex]
+version = "^0.4.3"
+
 [[bin]]
 name = "secured"
 path = "src/main.rs"

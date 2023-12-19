@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Enhanced CLI capabilities with glob patterns and inspection commands
+
 ## [0.5.1]
 
 ### Added

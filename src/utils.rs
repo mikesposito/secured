@@ -37,8 +37,7 @@ enum CachedCredentials {
 pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
   let plaintext_files = path
     .iter()
-    .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
-    .flatten()
+    .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
     .collect::<Vec<_>>();
 
   let encryption_key = match credentials {
@@ -79,7 +78,7 @@ pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
         if metadata(path).unwrap().is_file() {
           let file_contents = get_file_as_byte_vec(&filename);
           let encrypted_bytes = match &encryption_key {
-            CachedCredentials::Key(key) => file_contents.encrypt_with_key(&key),
+            CachedCredentials::Key(key) => file_contents.encrypt_with_key(key),
             CachedCredentials::KeyBytes(key) => file_contents.encrypt_with_raw_key(*key),
           };
           bytes_counter += encrypted_bytes.len();
@@ -116,8 +115,7 @@ pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
 pub fn decrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
   let encrypted_files = path
     .iter()
-    .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
-    .flatten()
+    .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
     .collect::<Vec<_>>();
 
   let counter = std::time::Instant::now();
@@ -247,7 +245,7 @@ pub(crate) fn get_password_or_prompt(password: Option<String>, confirmation: boo
       }
 
       password
-    },
+    }
   }
 }
 
@@ -316,8 +314,7 @@ pub(crate) fn generate_encryption_key_with_options(
 pub(crate) fn inspect_files(path: Vec<String>) {
   let files = path
     .iter()
-    .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
-    .flatten()
+    .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
     .collect::<Vec<_>>();
 
   for entry in files {
@@ -326,7 +323,7 @@ pub(crate) fn inspect_files(path: Vec<String>) {
         let filename = path.to_str().unwrap().to_string();
         let file_contents = get_file_as_byte_vec(&filename);
 
-        let enclave: Result<Enclave<Vec<u8>>, _> = Enclave::try_from(file_contents); 
+        let enclave: Result<Enclave<Vec<u8>>, _> = Enclave::try_from(file_contents);
 
         if enclave.is_err() {
           println!(" ------------------------------ ");
@@ -336,15 +333,16 @@ pub(crate) fn inspect_files(path: Vec<String>) {
         }
 
         let enclave = enclave.unwrap();
-        let envelope = SignedEnvelope::try_from(enclave.encrypted_bytes.to_vec()).expect("Invalid envelope");
+        let envelope =
+          SignedEnvelope::try_from(enclave.encrypted_bytes.to_vec()).expect("Invalid envelope");
 
         println!(" ------------------------------ ");
         println!("📦 > File\t\t\t {}\n", filename);
-        println!("ℹ️  > Signed envelope headers\t\t\t {}", hex::encode(envelope.header));
         println!(
-          "🤐 > Ciphertext\t\t\t {}",
-          hex::encode(envelope.data)
+          "ℹ️  > Signed envelope headers\t\t\t {}",
+          hex::encode(envelope.header)
         );
+        println!("🤐 > Ciphertext\t\t\t {}", hex::encode(envelope.data));
         println!("✍️  > Signature\t\t\t {}", hex::encode(envelope.mac));
         println!("🎲 > Nonce\t\t\t {}", hex::encode(enclave.nonce));
         println!("👓 > Enclave Metadata\t {}", hex::encode(enclave.metadata));

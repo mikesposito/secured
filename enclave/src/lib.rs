@@ -25,10 +25,10 @@ pub struct Enclave<T> {
   pub metadata: T,
 
   /// The encrypted data.
-  encrypted_bytes: Box<[u8]>,
+  pub encrypted_bytes: Box<[u8]>,
 
   /// The nonce used in the encryption process, 8 bytes long (ChaCha20).
-  nonce: [u8; NONCE_SIZE],
+  pub nonce: [u8; NONCE_SIZE],
 }
 
 impl<T> Enclave<T>
@@ -81,6 +81,28 @@ where
         .decrypt_and_verify(&envelope)?,
     )
   }
+
+  /// Recovers the key used to encrypt the enclave using a provided password.
+  ///
+  /// # Arguments
+  /// * `encrypted_bytes`: The encrypted enclave.
+  ///
+  /// # Returns
+  /// A `Result` containing the recovered key, or an error string if recovery fails.
+  pub fn recover_key(
+    encrypted_bytes: &[u8],
+    password: &[u8],
+  ) -> Result<Key<KEY_SIZE, 16>, EnclaveError> {
+    let strategy = KeyDerivationStrategy::try_from(
+      encrypted_bytes[encrypted_bytes.len() - 9..encrypted_bytes.len()].to_vec(),
+    )?;
+    let salt: [u8; 16] = encrypted_bytes[encrypted_bytes.len() - 25..encrypted_bytes.len() - 9]
+      .try_into()
+      .unwrap();
+    let key = Key::<KEY_SIZE, 16>::with_salt(password, salt, strategy);
+
+    Ok(key)
+  }
 }
 
 impl<T> From<Enclave<T>> for Vec<u8>
@@ -121,7 +143,15 @@ where
   /// # Returns
   /// A `Result` containing the deserialized `Enclave` instance, or an `EnclaveError` if deserialization fails.
   fn try_from(bytes: Vec<u8>) -> Result<Self, EnclaveError> {
+    if bytes.len() == 0 {
+      return Err(EnclaveError::Deserialization("No bytes found".to_string()));
+    }
     let metadata_len = bytes[0];
+    if usize::from(metadata_len) > bytes.len() {
+      return Err(EnclaveError::Deserialization(
+        "unexpected metadata length".to_string(),
+      ));
+    }
     let metadata = T::try_from(bytes[1..metadata_len as usize + 1].to_vec()).or(Err(
       EnclaveError::Deserialization("error deserializing metadata".to_string()),
     ))?;

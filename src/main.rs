@@ -2,7 +2,9 @@ use clap::{Parser, Subcommand};
 
 mod utils;
 pub use utils::{decrypt_files, encrypt_files};
-use utils::{generate_encryption_key_with_options, get_password_or_prompt, Credentials};
+use utils::{
+  generate_encryption_key_with_options, get_password_or_prompt, inspect_files, Credentials,
+};
 
 /// Defines command line subcommands for the application.
 #[derive(Debug, Subcommand)]
@@ -20,7 +22,12 @@ enum Command {
     /// If provided, the password will be ignored.
     #[arg(short, long)]
     key: Option<String>,
+
+    /// Wipe the original file after encryption.
+    #[arg(short, long)]
+    wipe: bool,
   },
+
   /// Decrypts a specified file.
   Decrypt {
     /// Path to the files to be decrypted. Supports glob patterns.
@@ -34,7 +41,12 @@ enum Command {
     /// If provided, the password will be ignored.
     #[arg(short, long)]
     key: Option<String>,
+
+    /// Wipe the encrypted file after decryption.
+    #[arg(short, long)]
+    wipe: bool,
   },
+
   /// Derives a key from a given password.
   Key {
     /// Optional password. If not provided, it will be prompted for.
@@ -50,6 +62,12 @@ enum Command {
     /// Defaults to a random 16 byte array.
     #[arg(short, long)]
     salt: Option<String>,
+  },
+
+  /// Inspects a specified `.secured` file.
+  Inspect {
+    /// Path to the files to be inspected. Supports glob patterns.
+    path: Vec<String>,
   },
 }
 
@@ -70,31 +88,34 @@ fn main() {
       path,
       password,
       key,
+      wipe,
     } => match key {
-      Some(key) => encrypt_files(&Credentials::HexKey(key), path),
+      Some(key) => encrypt_files(&Credentials::HexKey(key), path, wipe),
       None => {
-        let password = get_password_or_prompt(password);
-        encrypt_files(&Credentials::Password(password), path);
+        let password = get_password_or_prompt(password, true);
+        encrypt_files(&Credentials::Password(password), path, wipe);
       }
     },
     Command::Decrypt {
       path,
       password,
       key,
-    } =>  match key {
-      Some(key) => decrypt_files(&Credentials::HexKey(key), path),
+      wipe,
+    } => match key {
+      Some(key) => decrypt_files(&Credentials::HexKey(key), path, wipe),
       None => {
-        let password = get_password_or_prompt(password);
-        decrypt_files(&Credentials::Password(password), path);
+        let password = get_password_or_prompt(password, false);
+        decrypt_files(&Credentials::Password(password), path, wipe);
       }
-    }
+    },
     Command::Key {
       password,
       iterations,
       salt,
     } => {
-      let password = get_password_or_prompt(password);
+      let password = get_password_or_prompt(password, true);
       generate_encryption_key_with_options(&password, iterations, salt);
     }
+    Command::Inspect { path } => inspect_files(path),
   }
 }

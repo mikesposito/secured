@@ -5,8 +5,8 @@ use std::fs::{metadata, File};
 use std::io::{Read, Write};
 use std::time::Duration;
 
-use cipher::{Key, KeyDerivationStrategy};
-use enclave::{Decryptable, Encryptable};
+use cipher::{Key, KeyDerivationStrategy, SignedEnvelope};
+use enclave::{Decryptable, Enclave, Encryptable};
 
 pub(crate) const LOADERS: [&str; 7] = [
   "▹▹▹▹▹",
@@ -23,41 +23,46 @@ pub enum Credentials {
   HexKey(String),
 }
 
+enum CachedCredentials {
+  Key(Key<32, 16>),
+  KeyBytes([u8; 32]),
+}
+
 /// Encrypts files with a given password.
 ///
 /// # Arguments
 /// * `credentials` - The password used for encryption.
 /// * `path` - The path of the files to be encrypted.
-pub fn encrypt_files(credentials: &Credentials, path: Vec<String>) {
+/// * `wipe` - Whether or not to wipe the original file after encryption.
+pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
   let plaintext_files = path
     .iter()
     .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
     .flatten()
     .collect::<Vec<_>>();
 
-  match credentials {
+  let encryption_key = match credentials {
     Credentials::Password(password) => {
-      encrypt_multiple_with_password(password.to_string(), plaintext_files)
+      CachedCredentials::Key(generate_encryption_key_with_progress(password))
     }
     Credentials::HexKey(hex_key) => {
-      encrypt_multiple_with_hex_key(hex_key.to_string(), plaintext_files)
+      let encryption_key: [u8; 32] = hex::decode(hex_key)
+        .expect("Not a valid hex value")
+        .try_into()
+        .expect("Not a valid 32-byte key");
+
+      CachedCredentials::KeyBytes(encryption_key)
     }
   };
-}
 
-fn encrypt_multiple_with_password(
-  password: String,
-  plaintext_files: Vec<Result<std::path::PathBuf, glob::GlobError>>,
-) {
   let counter = std::time::Instant::now();
+  let mut bytes_counter: usize = 0;
   let progress = ProgressBar::new_spinner();
   progress.set_style(
     ProgressStyle::with_template("{spinner:.yellow} {msg}")
       .unwrap()
       .tick_strings(&LOADERS),
   );
-
-  let encryption_key = generate_encryption_key_with_progress(&password);
 
   for (i, entry) in plaintext_files.iter().enumerate() {
     match entry {
@@ -72,11 +77,20 @@ fn encrypt_multiple_with_password(
         ));
 
         if metadata(path).unwrap().is_file() {
-          let encrypted_bytes = get_file_as_byte_vec(&filename).encrypt_with_key(&encryption_key);
+          let file_contents = get_file_as_byte_vec(&filename);
+          let encrypted_bytes = match &encryption_key {
+            CachedCredentials::Key(key) => file_contents.encrypt_with_key(&key),
+            CachedCredentials::KeyBytes(key) => file_contents.encrypt_with_raw_key(*key),
+          };
+          bytes_counter += encrypted_bytes.len();
           File::create(format!("{}.secured", filename))
             .expect("Unable to create file")
             .write_all(&encrypted_bytes)
             .expect("Unable to write data");
+
+          if wipe {
+            std::fs::remove_file(filename).expect("Unable to remove file");
+          }
         }
 
         progress.tick();
@@ -86,59 +100,9 @@ fn encrypt_multiple_with_password(
   }
 
   progress.finish_with_message(format!(
-    "✅ > {} files secured in {}ms",
+    "✅ > {} files secured ({}MB in {}ms)",
     plaintext_files.len(),
-    counter.elapsed().as_millis()
-  ));
-}
-
-fn encrypt_multiple_with_hex_key(
-  hex_key: String,
-  plaintext_files: Vec<Result<std::path::PathBuf, glob::GlobError>>,
-) {
-  let counter = std::time::Instant::now();
-  let progress = ProgressBar::new_spinner();
-  progress.set_style(
-    ProgressStyle::with_template("{spinner:.yellow} {msg}")
-      .unwrap()
-      .tick_strings(&LOADERS),
-  );
-
-  let encryption_key: [u8; 32] = hex::decode(hex_key)
-    .expect("Not a valid hex value")
-    .try_into()
-    .expect("Not a valid 32-byte key");
-
-  for (i, entry) in plaintext_files.iter().enumerate() {
-    match entry {
-      Ok(path) => {
-        let filename = path.to_str().unwrap().to_string();
-
-        progress.set_message(format!(
-          "[{}/{}] {}",
-          i + 1,
-          plaintext_files.len(),
-          filename.clone()
-        ));
-
-        if metadata(path).unwrap().is_file() {
-          let encrypted_bytes =
-            get_file_as_byte_vec(&filename).encrypt_with_raw_key(encryption_key);
-          File::create(format!("{}.secured", filename))
-            .expect("Unable to create file")
-            .write_all(&encrypted_bytes)
-            .expect("Unable to write data");
-        }
-
-        progress.tick();
-      }
-      Err(e) => println!("{:?}", e),
-    }
-  }
-
-  progress.finish_with_message(format!(
-    "✅ > {} files secured in {}ms",
-    plaintext_files.len(),
+    bytes_counter / 1024 / 1024,
     counter.elapsed().as_millis()
   ));
 }
@@ -148,7 +112,8 @@ fn encrypt_multiple_with_hex_key(
 /// # Arguments
 /// * `password` - The password used for decryption.
 /// * `path` - The path of the files to be decrypted.
-pub fn decrypt_files(credentials: &Credentials, path: Vec<String>) {
+/// * `wipe` - Whether or not to wipe the encrypted file after decryption.
+pub fn decrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
   let encrypted_files = path
     .iter()
     .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
@@ -163,6 +128,22 @@ pub fn decrypt_files(credentials: &Credentials, path: Vec<String>) {
       .tick_strings(&LOADERS),
   );
 
+  let mut cached_encryption_key = match credentials {
+    // we skip the password derivation step in this case
+    // because we first need the key salt and iterations
+    // from the enclave
+    Credentials::Password(_) => [0u8; 32],
+    // in this case we already have the key, super fast!
+    Credentials::HexKey(hex_key) => {
+      let encryption_key: [u8; 32] = hex::decode(hex_key)
+        .expect("Not a valid hex value")
+        .try_into()
+        .expect("Not a valid 32-byte key");
+
+      encryption_key
+    }
+  };
+
   for (i, entry) in encrypted_files.iter().enumerate() {
     match entry {
       Ok(path) => {
@@ -175,25 +156,43 @@ pub fn decrypt_files(credentials: &Credentials, path: Vec<String>) {
           filename.clone()
         ));
 
-        let encrypted_bytes = get_file_as_byte_vec(&filename);
-        let recovered_bytes = match credentials {
-          Credentials::Password(password) => {
-            encrypted_bytes.decrypt(password.clone())
-          }
-          Credentials::HexKey(hex_key) => {
-            let encryption_key: [u8; 32] = hex::decode(hex_key)
-              .expect("Not a valid hex value")
-              .try_into()
-              .expect("Not a valid 32-byte key");
+        if metadata(path).unwrap().is_file() {
+          let encrypted_bytes = get_file_as_byte_vec(&filename);
+          let recovered_bytes = match credentials {
+            Credentials::Password(password) => {
+              // this step is optimistic
+              let enclave = Enclave::<Vec<u8>>::try_from(
+                encrypted_bytes[..encrypted_bytes.len() - 25].to_vec(),
+              )
+              .expect("Unable to parse enclave");
+              let result = enclave.decrypt(cached_encryption_key);
+              if result.is_ok() {
+                result
+              } else {
+                // if the optimistic decryption fails, we try again with the password
+                cached_encryption_key =
+                  Enclave::<Vec<u8>>::recover_key(&encrypted_bytes, password.as_bytes())
+                    .expect("Unable to recover encryption key")
+                    .pubk;
+                let enclave = Enclave::<Vec<u8>>::try_from(
+                  encrypted_bytes[..encrypted_bytes.len() - 25].to_vec(),
+                )
+                .expect("Unable to parse enclave");
+                enclave.decrypt(cached_encryption_key)
+              }
+            }
+            _ => encrypted_bytes.decrypt_with_key(cached_encryption_key),
+          };
 
-            encrypted_bytes.decrypt_with_key(encryption_key)
-          }
-        };
+          File::create(filename.replace(".secured", ""))
+            .expect("Unable to create file")
+            .write_all(&recovered_bytes.unwrap())
+            .expect("Unable to write data");
 
-        File::create(filename.replace(".secured", ""))
-          .expect("Unable to create file")
-          .write_all(&recovered_bytes.unwrap())
-          .expect("Unable to write data");
+          if wipe {
+            std::fs::remove_file(filename).expect("Unable to remove file");
+          }
+        }
 
         progress.tick();
       }
@@ -231,10 +230,24 @@ pub(crate) fn get_file_as_byte_vec(filename: &String) -> Vec<u8> {
 ///
 /// # Returns
 /// A `String` containing the password.
-pub(crate) fn get_password_or_prompt(password: Option<String>) -> String {
+pub(crate) fn get_password_or_prompt(password: Option<String>, confirmation: bool) -> String {
   match password {
     Some(password) => password,
-    None => prompt_password("Enter password: ").expect("Unable to read password"),
+    None => {
+      let password = prompt_password("Enter password: ").expect("Unable to read password");
+      if !confirmation {
+        return password;
+      }
+
+      let password_confirmation =
+        prompt_password("Confirm password: ").expect("Unable to read password");
+
+      if password != password_confirmation {
+        panic!("Passwords do not match");
+      }
+
+      password
+    },
   }
 }
 
@@ -298,4 +311,45 @@ pub(crate) fn generate_encryption_key_with_options(
 
   println!("🔑 > Key: {}", hex::encode(encryption_key.pubk));
   println!("🧂 > Salt: {}", hex::encode(encryption_key.salt));
+}
+
+pub(crate) fn inspect_files(path: Vec<String>) {
+  let files = path
+    .iter()
+    .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
+    .flatten()
+    .collect::<Vec<_>>();
+
+  for entry in files {
+    match entry {
+      Ok(path) => {
+        let filename = path.to_str().unwrap().to_string();
+        let file_contents = get_file_as_byte_vec(&filename);
+
+        let enclave: Result<Enclave<Vec<u8>>, _> = Enclave::try_from(file_contents); 
+
+        if enclave.is_err() {
+          println!(" ------------------------------ ");
+          println!("📦 > File\t\t\t {}", filename);
+          println!("🚫 > Not a valid enclave.\n\n\n");
+          continue;
+        }
+
+        let enclave = enclave.unwrap();
+        let envelope = SignedEnvelope::try_from(enclave.encrypted_bytes.to_vec()).expect("Invalid envelope");
+
+        println!(" ------------------------------ ");
+        println!("📦 > File\t\t\t {}\n", filename);
+        println!("ℹ️  > Signed envelope headers\t\t\t {}", hex::encode(envelope.header));
+        println!(
+          "🤐 > Ciphertext\t\t\t {}",
+          hex::encode(envelope.data)
+        );
+        println!("✍️  > Signature\t\t\t {}", hex::encode(envelope.mac));
+        println!("🎲 > Nonce\t\t\t {}", hex::encode(enclave.nonce));
+        println!("👓 > Enclave Metadata\t {}", hex::encode(enclave.metadata));
+      }
+      Err(e) => println!("{:?}", e),
+    }
+  }
 }

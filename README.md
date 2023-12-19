@@ -1,5 +1,16 @@
 # secured
 
+[![Crates.io][crates-badge]][crates-url]
+![Build and test][build-status-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/mikesposito/secured/issues)
+
+[crates-badge]: https://img.shields.io/crates/v/secured.svg
+[crates-url]: https://crates.io/crates/secured
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/mikesposito/secured/blob/main/LICENSE
+[build-status-url]: https://github.com/mikesposito/secured/actions/workflows/build-lint-test.yml/badge.svg
+
 A very fast CLI tool for encryption and decryption of large amounts of data
 
 ![](./.github/assets/secured.gif)

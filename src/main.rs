@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 mod utils;
 pub use utils::{decrypt_files, encrypt_files};
-use utils::{generate_encryption_key_with_options, get_password_or_prompt};
+use utils::{generate_encryption_key_with_options, get_password_or_prompt, Credentials};
 
 /// Defines command line subcommands for the application.
 #[derive(Debug, Subcommand)]
@@ -15,6 +15,11 @@ enum Command {
     /// Optional password. If not provided, it will be prompted for.
     #[arg(short, long)]
     password: Option<String>,
+
+    /// Optional hex encoded encryption key. If not provided, it will be derived from the password.
+    /// If provided, the password will be ignored.
+    #[arg(short, long)]
+    key: Option<String>,
   },
   /// Decrypts a specified file.
   Decrypt {
@@ -24,6 +29,11 @@ enum Command {
     /// Optional password. If not provided, it will be prompted for.
     #[arg(short, long)]
     password: Option<String>,
+
+    /// Optional hex encoded encryption key. If not provided, it will be derived from the password.
+    /// If provided, the password will be ignored.
+    #[arg(short, long)]
+    key: Option<String>,
   },
   /// Derives a key from a given password.
   Key {
@@ -56,13 +66,27 @@ fn main() {
   let args = Args::parse();
 
   match args.command {
-    Command::Encrypt { path, password } => {
-      let password = get_password_or_prompt(password);
-      encrypt_files(&password, path);
-    }
-    Command::Decrypt { path, password } => {
-      let password = get_password_or_prompt(password);
-      decrypt_files(&password, path);
+    Command::Encrypt {
+      path,
+      password,
+      key,
+    } => match key {
+      Some(key) => encrypt_files(&Credentials::HexKey(key), path),
+      None => {
+        let password = get_password_or_prompt(password);
+        encrypt_files(&Credentials::Password(password), path);
+      }
+    },
+    Command::Decrypt {
+      path,
+      password,
+      key,
+    } =>  match key {
+      Some(key) => decrypt_files(&Credentials::HexKey(key), path),
+      None => {
+        let password = get_password_or_prompt(password);
+        decrypt_files(&Credentials::Password(password), path);
+      }
     }
     Command::Key {
       password,

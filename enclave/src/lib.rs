@@ -181,7 +181,24 @@ impl Encryptable<KEY_SIZE> for Vec<u8> {
   /// A `Vec<u8>` containing the encrypted data.
   fn encrypt_with_key(&self, key: &Key<32, 16>) -> Vec<u8> {
     let enclave = Enclave::from_plain_bytes(vec![], key.pubk, self.clone()).unwrap();
-    [enclave.into(), key.salt.to_vec(), key.strategy.clone().into()].concat()
+    [
+      enclave.into(),
+      key.salt.to_vec(),
+      key.strategy.clone().into(),
+    ]
+    .concat()
+  }
+
+  /// Encrypts a vector of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    let enclave = Enclave::from_plain_bytes(vec![], key, self.clone()).unwrap();
+    enclave.into()
   }
 
   /// Encrypts a vector of bytes using a provided key and metadata.
@@ -310,6 +327,17 @@ impl Encryptable<KEY_SIZE> for &[u8] {
     self.to_vec().encrypt_with_key(key)
   }
 
+  /// Encrypts a slice of bytes using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    self.to_vec().encrypt_with_raw_key(key)
+  }
+
   /// Encrypts a slice of bytes using a provided key and metadata.
   ///
   /// # Arguments
@@ -348,6 +376,17 @@ impl Encryptable<KEY_SIZE> for String {
   /// A `Vec<u8>` containing the encrypted data.
   fn encrypt_with_key(&self, key: &Key<32, 16>) -> Vec<u8> {
     self.as_bytes().to_vec().encrypt_with_key(key)
+  }
+
+  /// Encrypts a String using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    self.as_bytes().to_vec().encrypt_with_raw_key(key)
   }
 
   /// Encrypts a String using a provided key and metadata.
@@ -390,6 +429,17 @@ impl Encryptable<KEY_SIZE> for &str {
   /// A `Vec<u8>` containing the encrypted data.
   fn encrypt_with_key(&self, key: &Key<32, 16>) -> Vec<u8> {
     self.as_bytes().to_vec().encrypt_with_key(key)
+  }
+
+  /// Encrypts a string using a provided key.
+  ///
+  /// # Arguments
+  /// * `key`: The 32-byte cipher key used for encryption.
+  ///
+  /// # Returns
+  /// A `Vec<u8>` containing the encrypted data.
+  fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
+    self.as_bytes().to_vec().encrypt_with_raw_key(key)
   }
 
   /// Encrypts an &str using a provided key and metadata.
@@ -487,7 +537,7 @@ mod tests {
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
       let key = [0u8; KEY_SIZE];
 
-      let encrypted_bytes = bytes.encrypt_with_key(key);
+      let encrypted_bytes = bytes.encrypt_with_raw_key(key);
       let decrypted_bytes = encrypted_bytes.decrypt_with_key(key);
 
       assert!(decrypted_bytes.is_ok());

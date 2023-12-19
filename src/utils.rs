@@ -18,20 +18,37 @@ pub(crate) const LOADERS: [&str; 7] = [
   "▪▪▪▪▪",
 ];
 
+pub enum Credentials {
+  Password(String),
+  HexKey(String),
+}
+
 /// Encrypts files with a given password.
 ///
 /// # Arguments
-/// * `password` - The password used for encryption.
+/// * `credentials` - The password used for encryption.
 /// * `path` - The path of the files to be encrypted.
-pub fn encrypt_files(password: &String, path: Vec<String>) {
+pub fn encrypt_files(credentials: &Credentials, path: Vec<String>) {
   let plaintext_files = path
     .iter()
     .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
     .flatten()
     .collect::<Vec<_>>();
 
-  let encryption_key = generate_encryption_key_with_progress(password);
+  match credentials {
+    Credentials::Password(password) => {
+      encrypt_multiple_with_password(password.to_string(), plaintext_files)
+    }
+    Credentials::HexKey(hex_key) => {
+      encrypt_multiple_with_hex_key(hex_key.to_string(), plaintext_files)
+    }
+  };
+}
 
+fn encrypt_multiple_with_password(
+  password: String,
+  plaintext_files: Vec<Result<std::path::PathBuf, glob::GlobError>>,
+) {
   let counter = std::time::Instant::now();
   let progress = ProgressBar::new_spinner();
   progress.set_style(
@@ -39,6 +56,8 @@ pub fn encrypt_files(password: &String, path: Vec<String>) {
       .unwrap()
       .tick_strings(&LOADERS),
   );
+
+  let encryption_key = generate_encryption_key_with_progress(&password);
 
   for (i, entry) in plaintext_files.iter().enumerate() {
     match entry {
@@ -73,12 +92,63 @@ pub fn encrypt_files(password: &String, path: Vec<String>) {
   ));
 }
 
+fn encrypt_multiple_with_hex_key(
+  hex_key: String,
+  plaintext_files: Vec<Result<std::path::PathBuf, glob::GlobError>>,
+) {
+  let counter = std::time::Instant::now();
+  let progress = ProgressBar::new_spinner();
+  progress.set_style(
+    ProgressStyle::with_template("{spinner:.yellow} {msg}")
+      .unwrap()
+      .tick_strings(&LOADERS),
+  );
+
+  let encryption_key: [u8; 32] = hex::decode(hex_key)
+    .expect("Not a valid hex value")
+    .try_into()
+    .expect("Not a valid 32-byte key");
+
+  for (i, entry) in plaintext_files.iter().enumerate() {
+    match entry {
+      Ok(path) => {
+        let filename = path.to_str().unwrap().to_string();
+
+        progress.set_message(format!(
+          "[{}/{}] {}",
+          i + 1,
+          plaintext_files.len(),
+          filename.clone()
+        ));
+
+        if metadata(path).unwrap().is_file() {
+          let encrypted_bytes =
+            get_file_as_byte_vec(&filename).encrypt_with_raw_key(encryption_key);
+          File::create(format!("{}.secured", filename))
+            .expect("Unable to create file")
+            .write_all(&encrypted_bytes)
+            .expect("Unable to write data");
+        }
+
+        progress.tick();
+      }
+      Err(e) => println!("{:?}", e),
+    }
+  }
+
+  progress.finish_with_message(format!(
+    "✅ > {} files secured in {}ms",
+    plaintext_files.len(),
+    counter.elapsed().as_millis()
+  ));
+}
+
 /// Decrypts files with a given password.
 ///
 /// # Arguments
 /// * `password` - The password used for decryption.
 /// * `path` - The path of the files to be decrypted.
-pub fn decrypt_files(password: &String, path: Vec<String>) {
+pub fn decrypt_files(credentials: &Credentials, path: Vec<String>) {
   let encrypted_files = path
     .iter()
     .map(|p| glob(&p).expect("Invalid file pattern").collect::<Vec<_>>())
@@ -105,7 +175,20 @@ pub fn decrypt_files(password: &String, path: Vec<String>) {
           filename.clone()
         ));
 
-        let recovered_bytes = get_file_as_byte_vec(&filename).decrypt(password.clone());
+        let encrypted_bytes = get_file_as_byte_vec(&filename);
+        let recovered_bytes = match credentials {
+          Credentials::Password(password) => {
+            encrypted_bytes.decrypt(password.clone())
+          }
+          Credentials::HexKey(hex_key) => {
+            let encryption_key: [u8; 32] = hex::decode(hex_key)
+              .expect("Not a valid hex value")
+              .try_into()
+              .expect("Not a valid 32-byte key");
+
+            encrypted_bytes.decrypt_with_key(encryption_key)
+          }
+        };
 
         File::create(filename.replace(".secured", ""))
           .expect("Unable to create file")
@@ -213,6 +296,6 @@ pub(crate) fn generate_encryption_key_with_options(
     counter.elapsed().as_millis()
   ));
 
-  println!("🔑 > Key: 0x{}", hex::encode(encryption_key.pubk));
-  println!("🧂 > Salt: 0x{}", hex::encode(encryption_key.salt));
+  println!("🔑 > Key: {}", hex::encode(encryption_key.pubk));
+  println!("🧂 > Salt: {}", hex::encode(encryption_key.salt));
 }

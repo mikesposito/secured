@@ -17,6 +17,8 @@ pub trait Encryptable<const KEY_SIZE: usize> {
 
   fn encrypt_with_key(&self, key: &Key<KEY_SIZE, 16>) -> Vec<u8>;
 
+  fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8>;
+
   fn encrypt_with_metadata<T>(&self, key: [u8; KEY_SIZE], metadata: T) -> Vec<u8>
   where
     T: From<Vec<u8>> + Into<Vec<u8>> + Clone;

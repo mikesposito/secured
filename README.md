@@ -2,6 +2,8 @@
 
 A very fast CLI tool for encryption and decryption of large amounts of data
 
+https://github.com/mikesposito/secured/assets/34438276/d82874b2-348d-4ade-860c-79e393bfd87e
+
 > [!WARNING]
 > As this crate is under early development, APIs are rapidly changing, and so is the documentation. 
 

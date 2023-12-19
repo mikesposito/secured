@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0]
+
 ### Changed
 - Enhanced CLI capabilities with glob patterns and inspection commands
 
@@ -68,7 +70,8 @@ All notable changes to this project will be documented in this file.
 
 - Initial release
 
-[Unreleased]: https://github.com/mikesposito/secured/compare/secured@0.5.1...HEAD
+[Unreleased]: https://github.com/mikesposito/secured/compare/secured@0.6.0...HEAD
+[0.6.0]: https://github.com/mikesposito/secured/compare/secured@0.5.1...secured@0.6.0
 [0.5.1]: https://github.com/mikesposito/secured/compare/secured@0.5.0...secured@0.5.1
 [0.5.0]: https://github.com/mikesposito/secured/compare/secured@0.4.0...secured@0.5.0
 [0.4.0]: https://github.com/mikesposito/secured/compare/secured@0.3.0...secured@0.4.0

@@ -17,7 +17,7 @@ Add the following line to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-enclave = "0.5.0"
+secured-enclave = "0.5.0"
 ```
 
 ## Usage

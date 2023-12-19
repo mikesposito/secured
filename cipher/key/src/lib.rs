@@ -12,6 +12,9 @@ pub struct Key<const P: usize, const S: usize> {
 
   /// Salt value.
   pub salt: [u8; S],
+
+  /// Key derivation strategy.
+  pub strategy: KeyDerivationStrategy,
 }
 
 impl<const P: usize, const S: usize> Key<P, S> {
@@ -41,7 +44,11 @@ impl<const P: usize, const S: usize> Key<P, S> {
       }
     }
 
-    Self { pubk, salt }
+    Self {
+      pubk,
+      salt,
+      strategy,
+    }
   }
 
   /// Constructs a new `Key` using a specified password, a provided salt, and a number of rounds for key derivation.
@@ -68,7 +75,11 @@ impl<const P: usize, const S: usize> Key<P, S> {
       }
     }
 
-    Self { pubk, salt }
+    Self {
+      pubk,
+      salt,
+      strategy,
+    }
   }
 }
 

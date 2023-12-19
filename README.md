@@ -1,14 +1,15 @@
 # secured
 
-Secured is a versatile Rust package that provides robust encryption and decryption capabilities. It can be seamlessly integrated as a library in other Rust applications or used as a standalone command-line interface (CLI) tool.
+A very fast CLI tool for encryption and decryption of large amounts of data
 
 > [!WARNING]
-> This crate is under development and APIs are rapidly changing (including this README!). Make sure to lock to a specific crate version to avoid updates.
+> As this crate is under early development, APIs are rapidly changing, and so is the documentation. 
 
 ## Features
 
-- **Encryption and Decryption**: Easily encrypt and decrypt files with password, using [the `ChaCha20` and `Poly1305` algorithms combined](cipher/README.md).
-- **Cli & Library**: Use as a standalone CLI tool or integrate as a library in your Rust applications.
+- **Encryption and Decryption**: Easily encrypt and decrypt files with password or a pre-generated encryption key.
+- **Key Derivation**: Generate encryption keys from passwords with customizable iterations and salt.
+- **File Inspection**: Inspect details of secured files.
 
 ## Installation
 
@@ -28,49 +29,47 @@ cargo add secured
 
 ## Usage
 
-### As a CLI Tool
+### Encrypting a Single File
 
-Secured is straightforward to use from the command line. Here are the basic commands:
+Encrypt a single file with a password. If no password is provided, the tool will prompt you for it.
 
-1. **Encryption**
-
-   ```sh
-   secured encrypt <FILE> [PASSWORD]
-   ```
-
-   Encrypts the specified `<FILE>`. An optional `[PASSWORD]` can be passed directly to the command.
-
-2. **Decryption**
-   ```sh
-   secured decrypt <FILE> [PASSWORD]
-   ```
-   Decrypts the specified `<FILE>`. An optional `[PASSWORD]` can be passed directly to the command. Obviously, the password must be the same used during encryption.
-
-### As a Library
-
-To use Secured as a library in your Rust application, simply import the package and utilize its encryption and decryption functions as per your requirements.
-
-#### Encrypting Data
-
-```rust
-use secured_enclave::{Enclave, Encryptable, KeyDerivationStrategy};
-
-let password = "strong_password";
-let encrypted_string = "Hello, world!".encrypt(password.to_string(), KeyDerivationStrategy::default());
+```sh
+secured encrypt secret.txt
 ```
 
-#### Decrypting Data
+### Decrypting a Single File
 
-```rust
-use secured_enclave::{Decryptable, EnclaveError};
+Decrypt a single file with a password. If no password is provided, the tool will prompt you for it.
 
-let password = "strong_password";
-let decrypted_result = encrypted_data.decrypt(password.to_string());
-
-println!("Decrypted data: {:?}", String::from_utf8(decrypted_data).unwrap())
+```sh
+secured decrypt secret.txt.secured
 ```
 
-See [Enclave documentation](enclave/README.md) for more advanced usage
+### Encrypting/Decrypting Multiple Files with Glob Patterns
+
+Use glob patterns to encrypt or decrypt multiple files with a single command.
+
+```sh
+secured encrypt data/*.txt
+secured decrypt data/*.txt.secured
+```
+
+### Generating Encryption Key
+
+Generate an encryption key from a password with customizable iterations and salt.
+
+```sh
+secured key --password my_secret_password --iterations 1000000 --salt abcdef1234567890
+```
+
+### Inspecting Secured Files
+
+Inspect details of one or more secured files.
+
+```sh
+secured inspect secret.txt.secured
+secured inspect data/*.txt.secured
+```
 
 ## Contributing
 
@@ -79,3 +78,4 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 ## License
 
 Secured is distributed under the MIT License. See `LICENSE` for more information.
+```

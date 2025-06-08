@@ -1,5 +1,6 @@
 mod core;
 pub use core::{permute, xor_bytes, Block, CHACHA20_NONCE_SIZE, CONSTANTS, STATE_WORDS};
+use core::{CHACHA20_BLOCK_SIZE, DEFAULT_BLOCKS_PER_THREAD};
 
 use crate::EncryptionAlgorithm;
 
@@ -11,19 +12,22 @@ use rayon::prelude::*;
 #[derive(Clone)]
 pub struct ChaCha20 {
   state: Block,
+  blocks_per_thread: usize,
 }
 
 impl ChaCha20 {
-  /// Constructs a new `ChaCha20` cipher instance.
+  /// Sets the number of blocks to process per thread.
+  /// This method allows customization of how many 64-byte blocks will be processed in parallel
   ///
-  /// This function initializes the internal state of the cipher.
+  /// # Example
+  /// ```
+  /// use secured_cipher::ChaCha20;
   ///
-  /// # Returns
-  /// A new instance of `ChaCha20`.
-  pub fn new() -> Self {
-    Self {
-      state: [0u32; STATE_WORDS],
-    }
+  /// let mut chacha20 = ChaCha20::default().set_blocks_per_thread(200);
+  /// ```
+  pub fn set_blocks_per_thread(mut self, blocks: usize) -> Self {
+    self.blocks_per_thread = blocks;
+    self
   }
 
   /// Generates the next 64-byte keystream block from the ChaCha20 state.
@@ -43,7 +47,7 @@ impl ChaCha20 {
   /// ```
   /// use secured_cipher::{ChaCha20, AlgorithmKeyIVInit};
   ///
-  /// let mut chacha20 = ChaCha20::new();
+  /// let mut chacha20 = ChaCha20::default();
   /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
   ///
   /// let keystream_block = chacha20.next_keystream();
@@ -94,6 +98,22 @@ impl ChaCha20 {
 
     // Return the generated 64-byte keystream block
     keystream
+  }
+}
+
+impl Default for ChaCha20 {
+  /// Creates a new instance of the `ChaCha20` cipher with an uninitialized state.
+  ///
+  /// This method initializes the `ChaCha20` struct with a default state, which is necessary
+  /// before calling the `init` method to set up the cipher with a specific key and IV.
+  ///
+  /// # Returns
+  /// A new `ChaCha20` instance with its internal state set to zero.
+  fn default() -> Self {
+    ChaCha20 {
+      state: [0; STATE_WORDS],
+      blocks_per_thread: DEFAULT_BLOCKS_PER_THREAD,
+    }
   }
 }
 
@@ -154,7 +174,7 @@ impl AlgorithmProcess for ChaCha20 {
   /// ```
   /// use secured_cipher::{ChaCha20, algorithm::{AlgorithmKeyIVInit, AlgorithmProcess}};
   ///
-  /// let mut chacha20 = ChaCha20::new();
+  /// let mut chacha20 = ChaCha20::default();
   /// chacha20.init(&[0_u8; 32], &[0_u8; 12]);
   ///
   /// let data = b"some plaintext data"; // Data to be encrypted or decrypted
@@ -171,7 +191,7 @@ impl AlgorithmProcess for ChaCha20 {
 
     // Process each 64-byte block of the input data
     out
-      .par_chunks_mut(64 * 100)
+      .par_chunks_mut(CHACHA20_BLOCK_SIZE * 100)
       .enumerate()
       .for_each(|(i, par_chunk)| {
         par_chunk.chunks_mut(64).enumerate().for_each(|(j, chunk)| {
@@ -198,7 +218,7 @@ impl AlgorithmProcessInPlace for ChaCha20 {
   fn process_in_place(&self, bytes: &mut [u8]) {
     // Process 6.4 kilobytes per thread
     bytes
-      .par_chunks_mut(64 * 100)
+      .par_chunks_mut(CHACHA20_BLOCK_SIZE * 100)
       .enumerate()
       .for_each(|(i, par_chunk)| {
         // Process each 64-byte block of the input data
@@ -248,7 +268,7 @@ mod tests {
 
   #[test]
   fn it_correctly_inits_the_chacha20_state() {
-    let mut chacha20 = ChaCha20::new();
+    let mut chacha20 = ChaCha20::default();
     chacha20.init(&KEY, &IV);
 
     assert_eq!(
@@ -263,7 +283,7 @@ mod tests {
 
   #[test]
   fn it_gets_the_first_keystream() {
-    let mut chacha20 = ChaCha20::new();
+    let mut chacha20 = ChaCha20::default();
     chacha20.init(&KEY, &IV);
 
     let block = chacha20.next_keystream();
@@ -282,7 +302,7 @@ mod tests {
 
   #[test]
   fn it_encrypts_data() {
-    let mut chacha20 = ChaCha20::new();
+    let mut chacha20 = ChaCha20::default();
     chacha20.init(
       &KEY,
       &[
@@ -297,7 +317,7 @@ mod tests {
 
   #[test]
   fn it_can_reverse_encryption() {
-    let mut chacha20 = ChaCha20::new();
+    let mut chacha20 = ChaCha20::default();
     chacha20.init(&[1u8; 32], &[2u8; CHACHA20_NONCE_SIZE]);
     let data = [0u8; 64];
 
@@ -309,7 +329,7 @@ mod tests {
 
   #[test]
   fn it_can_reverse_encryption_for_data_smaller_than_a_chunk() {
-    let mut chacha20 = ChaCha20::new();
+    let mut chacha20 = ChaCha20::default();
     chacha20.init(&[1u8; 32], &[2u8; CHACHA20_NONCE_SIZE]);
     let data = [0u8; 1];
 
@@ -321,9 +341,9 @@ mod tests {
 
   #[test]
   fn it_process_in_place_as_expected() {
-    let mut chacha20_1 = ChaCha20::new();
+    let mut chacha20_1 = ChaCha20::default();
     chacha20_1.init(&[0u8; 32], &[0u8; CHACHA20_NONCE_SIZE]);
-    let mut chacha20_2 = ChaCha20::new();
+    let mut chacha20_2 = ChaCha20::default();
     chacha20_2.init(&[0u8; 32], &[0u8; CHACHA20_NONCE_SIZE]);
     let mut data = [0u8; 64 * 1000];
     let data2 = data.clone();

@@ -24,7 +24,7 @@ impl AlgorithmKeyInit for Blake3Mac {
 impl AlgorithmProcess for Blake3Mac {
   fn process(&mut self, data: &[u8]) -> Vec<u8> {
     let mut hasher = Hasher::new_keyed(&self.key);
-    hasher.update(data);
+    hasher.update_rayon(data);
     hasher.finalize().as_bytes().to_vec()
   }
 }

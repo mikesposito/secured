@@ -162,20 +162,20 @@ impl Cipher {
   ///
   /// # Returns
   /// A signed envelope containing the data and its MAC (message authentication code).
-  pub fn sign(&mut self, header: &[u8], data: &[u8]) -> SignedEnvelope {
+  pub fn sign(&mut self, header: Vec<u8>, data: Vec<u8>) -> SignedEnvelope {
     // Ensure the AEAD algorithm is available
     let aead = self
       .aead
       .as_mut()
       .expect("AEAD algorithm is not initialized");
 
-    let mac = aead.process(&[header.to_vec(), data.to_vec()].concat());
+    let mut payload = Vec::with_capacity(header.len() + data.len());
+    payload.extend_from_slice(&header);
+    payload.extend_from_slice(&data);
 
-    SignedEnvelope {
-      header: header.to_vec(),
-      data: data.into(),
-      mac,
-    }
+    let mac = aead.process(&payload);
+
+    SignedEnvelope { header, data, mac }
   }
 
   /// Decrypts the provided data.

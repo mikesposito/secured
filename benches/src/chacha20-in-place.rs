@@ -2,7 +2,7 @@ use criterion::{
   criterion_group, criterion_main, BenchmarkId, Criterion, PlotConfiguration, Throughput,
 };
 use secured_cipher::{
-  algorithm::{chacha20::CHACHA20_NONCE_SIZE, AlgorithmProcess, AlgorithmProcessInPlace},
+  algorithm::{chacha20::CHACHA20_NONCE_SIZE, AlgorithmProcessInPlace},
   AlgorithmKeyIVInit, ChaCha20,
 };
 
@@ -10,7 +10,7 @@ const KB: usize = 1024;
 const MB: usize = 1024 * KB;
 
 fn bench(c: &mut Criterion) {
-  let mut group = c.benchmark_group("ChaCha20");
+  let mut group = c.benchmark_group("ChaCha20 in-place processing");
   let plot_config = PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
   group.plot_config(plot_config);
 
@@ -36,10 +36,14 @@ fn bench(c: &mut Criterion) {
     let mut chacha20 = ChaCha20::default();
     chacha20.init(&key, &iv);
 
-    group.bench_with_input(BenchmarkId::new("process", size), size, |b, &_size| {
-      let mut bytes = vec![0u8; *size];
-      b.iter(|| chacha20.process(&mut bytes));
-    });
+    group.bench_with_input(
+      BenchmarkId::new("process_in_place", size),
+      size,
+      |b, &_size| {
+        let mut bytes = vec![0u8; *size];
+        b.iter(|| chacha20.process_in_place(&mut bytes));
+      },
+    );
   }
 
   group.finish();

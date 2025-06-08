@@ -18,6 +18,11 @@ path = "src/chacha20.rs"
 harness = false
 
 [[bench]]
+name = "chacha20-in-place"
+path = "src/chacha20-in-place.rs"
+harness = false
+
+[[bench]]
 name = "chacha20-blocks-per-thread"
 path = "src/chacha20-blocks-per-thread.rs"
 harness = false

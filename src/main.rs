@@ -3,7 +3,8 @@ use clap::{Parser, Subcommand};
 mod utils;
 pub use utils::{decrypt_files, encrypt_files};
 use utils::{
-  generate_encryption_key_with_options, get_password_or_prompt, inspect_files, Credentials,
+  generate_encryption_key_with_options, get_password_or_prompt, inspect_files,
+  pack_and_encrypt_files, Credentials,
 };
 
 /// Defines command line subcommands for the application.
@@ -29,7 +30,7 @@ enum Command {
 
     /// Pack the encrypted file into a tar archive.
     #[arg(short, long)]
-    pack: bool,
+    pack: Option<String>,
   },
 
   /// Decrypts a specified file.
@@ -49,6 +50,10 @@ enum Command {
     /// Wipe the encrypted file after decryption.
     #[arg(short, long)]
     wipe: bool,
+
+    /// Unpack the encrypted file from a tar archive.
+    #[arg(short, long)]
+    unpack: bool,
   },
 
   /// Derives a key from a given password.
@@ -94,25 +99,35 @@ fn main() {
       key,
       wipe,
       pack,
-    } => match key {
-      Some(key) => encrypt_files(&Credentials::HexKey(key), path, wipe),
-      None => {
-        let password = get_password_or_prompt(password, true);
-        encrypt_files(&Credentials::Password(password), path, wipe)
+    } => {
+      let credentials = match key {
+        Some(key) => Credentials::HexKey(key),
+        None => {
+          let password = get_password_or_prompt(password, true);
+          Credentials::Password(password)
+        }
+      };
+      match pack {
+        Some(pack_name) => pack_and_encrypt_files(&credentials, path, pack_name, wipe),
+        None => encrypt_files(&credentials, path, wipe),
       }
-    },
+    }
     Command::Decrypt {
       path,
       password,
       key,
       wipe,
-    } => match key {
-      Some(key) => decrypt_files(&Credentials::HexKey(key), path, wipe),
-      None => {
-        let password = get_password_or_prompt(password, false);
-        decrypt_files(&Credentials::Password(password), path, wipe)
-      }
-    },
+      unpack,
+    } => {
+      let credentials = match key {
+        Some(key) => Credentials::HexKey(key),
+        None => {
+          let password = get_password_or_prompt(password, true);
+          Credentials::Password(password)
+        }
+      };
+      decrypt_files(&credentials, path, wipe)
+    }
     Command::Key {
       password,
       iterations,

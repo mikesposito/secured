@@ -115,17 +115,81 @@ pub fn encrypt_files(
 pub fn pack_and_encrypt_files(
   credentials: &Credentials,
   paths: Vec<String>,
+  output: String,
   wipe: bool,
 ) -> Result<(), String> {
   let buffer = Vec::new();
   let cursor = std::io::Cursor::new(buffer);
   let mut archive = tar::Builder::new(cursor);
 
-  for filepath in paths {
-    archive
-      .append_path(filepath)
-      .map_err(|e| format!("Failed to append path {}: {}", filepath, e))?;
+  let plaintext_files = paths
+    .iter()
+    .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
+    .collect::<Vec<_>>();
+  for path in plaintext_files.iter() {
+    match path {
+      Ok(path) if path.is_file() => {
+        let filename = path.to_str().unwrap().to_string();
+        archive
+          .append_path(&filename)
+          .map_err(|e| format!("Failed to append path {}: {}", &filename, e))?;
+        if wipe {
+          std::fs::remove_file(&filename)
+            .map_err(|e| format!("Failed to remove file {}: {}", &filename, e))?;
+        }
+      }
+      _ => continue, // Skip non-file entries
+    }
   }
+
+  let cursor = archive
+    .into_inner()
+    .map_err(|e| format!("Failed to finalize archive: {}", e))?;
+
+  let archive_bytes = cursor.into_inner();
+
+  let counter = std::time::Instant::now();
+  let mut bytes_counter: usize = 0;
+  let progress = ProgressBar::new_spinner();
+  progress.set_style(
+    ProgressStyle::with_template("{spinner:.yellow} {msg}")
+      .unwrap()
+      .tick_strings(&LOADERS),
+  );
+
+  let encryption_key = match credentials {
+    Credentials::Password(password) => {
+      CachedCredentials::Key(generate_encryption_key_with_progress(password))
+    }
+    Credentials::HexKey(hex_key) => {
+      let encryption_key: [u8; 32] = hex::decode(hex_key)
+        .expect("Not a valid hex value")
+        .try_into()
+        .expect("Not a valid 32-byte key");
+
+      CachedCredentials::KeyBytes(encryption_key)
+    }
+  };
+
+  let encrypted_bytes = match &encryption_key {
+    CachedCredentials::Key(key) => archive_bytes.encrypt_with_key(key),
+    CachedCredentials::KeyBytes(key) => archive_bytes.encrypt_with_raw_key(*key),
+  };
+
+  File::create(format!("{}.spack", output))
+    .expect("Unable to create file")
+    .write_all(&encrypted_bytes)
+    .expect("Unable to write data");
+  bytes_counter += encrypted_bytes.len();
+
+  progress.finish_with_message(format!(
+    "✅ > {} files packed ({}MB in {}ms)",
+    paths.len(),
+    bytes_counter / 1024 / 1024,
+    counter.elapsed().as_millis()
+  ));
+
+  Ok(())
 }
 
 /// Decrypts files with a given password.
@@ -229,6 +293,96 @@ pub fn decrypt_files(
     counter.elapsed().as_millis()
   ));
 
+  Ok(())
+}
+
+pub fn decrypt_and_unpack_files(
+  credentials: &Credentials,
+  paths: Vec<String>,
+  output: String,
+  wipe: bool,
+) -> Result<(), String> {
+  let encrypted_files = paths
+    .iter()
+    .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
+    .collect::<Vec<_>>();
+
+  let counter = std::time::Instant::now();
+  let progress = ProgressBar::new_spinner();
+  progress.set_style(
+    ProgressStyle::with_template("{spinner:.yellow} {msg}")
+      .unwrap()
+      .tick_strings(&LOADERS),
+  );
+
+  let mut cached_encryption_key = match credentials {
+    Credentials::Password(_) => [0u8; 32],
+    Credentials::HexKey(hex_key) => {
+      let encryption_key: [u8; 32] = hex::decode(hex_key)
+        .expect("Not a valid hex value")
+        .try_into()
+        .expect("Not a valid 32-byte key");
+
+      encryption_key
+    }
+  };
+
+  for (i, entry) in encrypted_files.iter().enumerate() {
+    match entry {
+      Ok(path) => {
+        let filename = path.to_str().unwrap().to_string();
+
+        progress.set_message(format!(
+          "[{}/{}] {}",
+          i + 1,
+          encrypted_files.len(),
+          filename.clone()
+        ));
+
+        if metadata(path).unwrap().is_file() {
+          let encrypted_bytes = get_file_as_byte_vec(&filename);
+          let enclave = Enclave::<Vec<u8>>::try_from(encrypted_bytes.clone()).or(Err(format!(
+            "File {} is not a valid enclave",
+            filename.clone()
+          )))?;
+          let recovered_bytes = match credentials {
+            Credentials::Password(password) => {
+              // we hope that the key is the same as the one used for the previous file
+              let result = enclave.decrypt(cached_encryption_key);
+              if result.is_ok() {
+                result
+              } else {
+                // if the optimistic decryption fails, we try again with the password
+                cached_encryption_key = enclave
+                  .recover_key(password.as_bytes())
+                  .or(Err(format!("Unable to recover encryption key")))?
+                  .pubk;
+                enclave.decrypt(cached_encryption_key)
+              }
+            }
+            _ => encrypted_bytes.decrypt_with_key(cached_encryption_key),
+          };
+
+          let decrypted_data = recovered_bytes.unwrap();
+          let mut archive = tar::Archive::new(std::io::Cursor::new(decrypted_data.clone()));
+          archive.unpack(&output).or(Err(format!(
+            "Unable to unpack archive from file {}",
+            filename
+          )))?;
+          if wipe {
+            std::fs::remove_file(filename).or(Err(format!("Unable to remove file")))?;
+          }
+        }
+        progress.tick();
+      }
+      Err(e) => println!("{:?}", e),
+    }
+  }
+  progress.finish_with_message(format!(
+    "✅ > {} files unpacked in {}ms",
+    encrypted_files.len(),
+    counter.elapsed().as_millis()
+  ));
   Ok(())
 }
 

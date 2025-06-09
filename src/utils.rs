@@ -34,7 +34,11 @@ enum CachedCredentials {
 /// * `credentials` - The password used for encryption.
 /// * `path` - The path of the files to be encrypted.
 /// * `wipe` - Whether or not to wipe the original file after encryption.
-pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
+pub fn encrypt_files(
+  credentials: &Credentials,
+  path: Vec<String>,
+  wipe: bool,
+) -> Result<(), String> {
   let plaintext_files = path
     .iter()
     .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
@@ -104,6 +108,8 @@ pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
     bytes_counter / 1024 / 1024,
     counter.elapsed().as_millis()
   ));
+
+  Ok(())
 }
 
 /// Decrypts files with a given password.
@@ -112,7 +118,11 @@ pub fn encrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
 /// * `password` - The password used for decryption.
 /// * `path` - The path of the files to be decrypted.
 /// * `wipe` - Whether or not to wipe the encrypted file after decryption.
-pub fn decrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
+pub fn decrypt_files(
+  credentials: &Credentials,
+  path: Vec<String>,
+  wipe: bool,
+) -> Result<(), String> {
   let encrypted_files = path
     .iter()
     .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
@@ -156,26 +166,22 @@ pub fn decrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
 
         if metadata(path).unwrap().is_file() {
           let encrypted_bytes = get_file_as_byte_vec(&filename);
+          let enclave = Enclave::<Vec<u8>>::try_from(encrypted_bytes.clone()).or(Err(format!(
+            "File {} is not a valid enclave",
+            filename.clone()
+          )))?;
           let recovered_bytes = match credentials {
             Credentials::Password(password) => {
-              // this step is optimistic
-              let enclave = Enclave::<Vec<u8>>::try_from(
-                encrypted_bytes[..encrypted_bytes.len() - 25].to_vec(),
-              )
-              .expect("Unable to parse enclave");
+              // we hope that the key is the same as the one used for the previous file
               let result = enclave.decrypt(cached_encryption_key);
               if result.is_ok() {
                 result
               } else {
                 // if the optimistic decryption fails, we try again with the password
-                cached_encryption_key =
-                  Enclave::<Vec<u8>>::recover_key(&encrypted_bytes, password.as_bytes())
-                    .expect("Unable to recover encryption key")
-                    .pubk;
-                let enclave = Enclave::<Vec<u8>>::try_from(
-                  encrypted_bytes[..encrypted_bytes.len() - 25].to_vec(),
-                )
-                .expect("Unable to parse enclave");
+                cached_encryption_key = enclave
+                  .recover_key(password.as_bytes())
+                  .or(Err(format!("Unable to recover encryption key")))?
+                  .pubk;
                 enclave.decrypt(cached_encryption_key)
               }
             }
@@ -185,10 +191,13 @@ pub fn decrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
           File::create(filename.replace(".secured", ""))
             .expect("Unable to create file")
             .write_all(&recovered_bytes.unwrap())
-            .expect("Unable to write data");
+            .or(Err(format!(
+              "Unable to write decrypted data to file {}",
+              filename.replace(".secured", "")
+            )))?;
 
           if wipe {
-            std::fs::remove_file(filename).expect("Unable to remove file");
+            std::fs::remove_file(filename).or(Err(format!("Unable to remove file")))?;
           }
         }
 
@@ -203,6 +212,8 @@ pub fn decrypt_files(credentials: &Credentials, path: Vec<String>, wipe: bool) {
     encrypted_files.len(),
     counter.elapsed().as_millis()
   ));
+
+  Ok(())
 }
 
 /// Reads a file and returns its contents as a byte vector.
@@ -275,7 +286,7 @@ pub(crate) fn generate_encryption_key_with_options(
   password: &String,
   iterations: usize,
   salt: Option<String>,
-) {
+) -> Result<(), String> {
   let counter = std::time::Instant::now();
   let derivation_progress = ProgressBar::new_spinner();
 
@@ -309,9 +320,11 @@ pub(crate) fn generate_encryption_key_with_options(
 
   println!("🔑 > Key: {}", hex::encode(encryption_key.pubk));
   println!("🧂 > Salt: {}", hex::encode(encryption_key.salt));
+
+  Ok(())
 }
 
-pub(crate) fn inspect_files(path: Vec<String>) {
+pub(crate) fn inspect_files(path: Vec<String>) -> Result<(), String> {
   let files = path
     .iter()
     .flat_map(|p| glob(p).expect("Invalid file pattern").collect::<Vec<_>>())
@@ -350,4 +363,6 @@ pub(crate) fn inspect_files(path: Vec<String>) {
       Err(e) => println!("{:?}", e),
     }
   }
+
+  Ok(())
 }

@@ -83,7 +83,7 @@ struct Args {
 fn main() {
   let args = Args::parse();
 
-  match args.command {
+  let result = match args.command {
     Command::Encrypt {
       path,
       password,
@@ -93,7 +93,7 @@ fn main() {
       Some(key) => encrypt_files(&Credentials::HexKey(key), path, wipe),
       None => {
         let password = get_password_or_prompt(password, true);
-        encrypt_files(&Credentials::Password(password), path, wipe);
+        encrypt_files(&Credentials::Password(password), path, wipe)
       }
     },
     Command::Decrypt {
@@ -105,7 +105,7 @@ fn main() {
       Some(key) => decrypt_files(&Credentials::HexKey(key), path, wipe),
       None => {
         let password = get_password_or_prompt(password, false);
-        decrypt_files(&Credentials::Password(password), path, wipe);
+        decrypt_files(&Credentials::Password(password), path, wipe)
       }
     },
     Command::Key {
@@ -114,8 +114,13 @@ fn main() {
       salt,
     } => {
       let password = get_password_or_prompt(password, true);
-      generate_encryption_key_with_options(&password, iterations, salt);
+      generate_encryption_key_with_options(&password, iterations, salt)
     }
     Command::Inspect { path } => inspect_files(path),
+  };
+
+  if let Err(e) = result {
+    eprintln!("Decryption failed: {}", e);
+    std::process::exit(1);
   }
 }

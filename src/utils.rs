@@ -112,6 +112,22 @@ pub fn encrypt_files(
   Ok(())
 }
 
+pub fn pack_and_encrypt_files(
+  credentials: &Credentials,
+  paths: Vec<String>,
+  wipe: bool,
+) -> Result<(), String> {
+  let buffer = Vec::new();
+  let cursor = std::io::Cursor::new(buffer);
+  let mut archive = tar::Builder::new(cursor);
+
+  for filepath in paths {
+    archive
+      .append_path(filepath)
+      .map_err(|e| format!("Failed to append path {}: {}", filepath, e))?;
+  }
+}
+
 /// Decrypts files with a given password.
 ///
 /// # Arguments

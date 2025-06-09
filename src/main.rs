@@ -26,6 +26,10 @@ enum Command {
     /// Wipe the original file after encryption.
     #[arg(short, long)]
     wipe: bool,
+
+    /// Pack the encrypted file into a tar archive.
+    #[arg(short, long)]
+    pack: bool,
   },
 
   /// Decrypts a specified file.
@@ -89,6 +93,7 @@ fn main() {
       password,
       key,
       wipe,
+      pack,
     } => match key {
       Some(key) => encrypt_files(&Credentials::HexKey(key), path, wipe),
       None => {

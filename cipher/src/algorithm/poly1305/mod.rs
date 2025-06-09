@@ -118,11 +118,11 @@ impl AlgorithmProcess for Poly1305 {
   /// 16-byte blocks, the final block is padded as necessary.
   ///
   /// # Arguments
-  /// * `data` - A byte slice representing the data to be processed.
+  /// * `data` - A byte vector representing the data to be processed.
   ///
   /// # Returns
   /// A vector of bytes (`Vec<u8>`) containing the computed MAC.
-  fn process(&mut self, data: &[u8]) -> Vec<u8> {
+  fn process(&mut self, data: Vec<u8>) -> Vec<u8> {
     let blocks = data.chunks_exact(16);
     let partial = blocks.remainder();
 

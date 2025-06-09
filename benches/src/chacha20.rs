@@ -37,8 +37,8 @@ fn bench(c: &mut Criterion) {
     chacha20.init(&key, &iv);
 
     group.bench_with_input(BenchmarkId::new("process", size), size, |b, &_size| {
-      let mut bytes = vec![0u8; *size];
-      b.iter(|| chacha20.process(&mut bytes));
+      let bytes = vec![0u8; *size];
+      b.iter(|| chacha20.process(bytes.clone()));
     });
   }
 

@@ -53,7 +53,7 @@ where
     let mut cipher = Cipher::default();
     cipher.init(&key, &nonce);
 
-    let encrypted_bytes = cipher.encrypt(&plain_bytes);
+    let encrypted_bytes = cipher.encrypt(plain_bytes);
     let envelope: Vec<u8> = cipher.sign(metadata.clone().into(), encrypted_bytes).into();
 
     Ok(Enclave {
@@ -76,7 +76,7 @@ where
     Ok(
       Cipher::default()
         .init(&key, &self.nonce)
-        .decrypt_and_verify(&envelope)?,
+        .decrypt_and_verify(envelope)?,
     )
   }
 

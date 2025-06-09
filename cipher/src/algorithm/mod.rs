@@ -50,7 +50,7 @@ pub trait AlgorithmProcess {
   ///
   /// # Returns
   /// A vector of bytes representing the processed data.
-  fn process(&mut self, data: &[u8]) -> Vec<u8>;
+  fn process(&mut self, data: Vec<u8>) -> Vec<u8>;
 }
 
 pub trait AlgorithmProcessInPlace {

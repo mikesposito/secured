@@ -164,7 +164,7 @@ impl AlgorithmProcess for ChaCha20 {
   /// for both encryption and decryption due to the reversible nature of the XOR operation.
   ///
   /// # Arguments
-  /// * `bytes_in` - A slice of bytes representing the input data to be processed (either plaintext for encryption
+  /// * `bytes_in` - A mutable vector of bytes representing the input data to be processed (either plaintext for encryption
   ///   or ciphertext for decryption).
   ///
   /// # Returns
@@ -185,12 +185,9 @@ impl AlgorithmProcess for ChaCha20 {
   /// # Notes
   /// It's important to use the same nonce and key for decrypting the data that were used for encryption.
   /// The output size will be equal to the input size, as ChaCha20 is a stream cipher.
-  fn process(&mut self, bytes_in: &[u8]) -> Vec<u8> {
-    // Clone the input bytes to prepare the output vector
-    let mut out = bytes_in.to_owned();
-
+  fn process(&mut self, mut bytes_in: Vec<u8>) -> Vec<u8> {
     // Process each 64-byte block of the input data
-    out
+    bytes_in
       .par_chunks_mut(CHACHA20_BLOCK_SIZE * 100)
       .enumerate()
       .for_each(|(i, par_chunk)| {
@@ -203,7 +200,7 @@ impl AlgorithmProcess for ChaCha20 {
       });
 
     // Return the processed data
-    out.to_vec()
+    bytes_in
   }
 }
 
@@ -310,7 +307,7 @@ mod tests {
       ],
     );
 
-    let encrypted_data = chacha20.process(&PLAINTEXT);
+    let encrypted_data = chacha20.process(PLAINTEXT.to_vec());
 
     assert_eq!(encrypted_data, CIPHERTEXT);
   }
@@ -319,10 +316,10 @@ mod tests {
   fn it_can_reverse_encryption() {
     let mut chacha20 = ChaCha20::default();
     chacha20.init(&[1u8; 32], &[2u8; CHACHA20_NONCE_SIZE]);
-    let data = [0u8; 64];
+    let data = vec![0u8; 64];
 
-    let encrypted_data = chacha20.process(&data);
-    let decrypted_data = chacha20.process(&encrypted_data);
+    let encrypted_data = chacha20.process(data.clone());
+    let decrypted_data = chacha20.process(encrypted_data);
 
     assert_eq!(decrypted_data, data);
   }
@@ -331,10 +328,10 @@ mod tests {
   fn it_can_reverse_encryption_for_data_smaller_than_a_chunk() {
     let mut chacha20 = ChaCha20::default();
     chacha20.init(&[1u8; 32], &[2u8; CHACHA20_NONCE_SIZE]);
-    let data = [0u8; 1];
+    let data = vec![0u8; 1];
 
-    let encrypted_data = chacha20.process(&data);
-    let decrypted_data = chacha20.process(&encrypted_data);
+    let encrypted_data = chacha20.process(data.clone());
+    let decrypted_data = chacha20.process(encrypted_data);
 
     assert_eq!(decrypted_data, data);
   }
@@ -345,11 +342,11 @@ mod tests {
     chacha20_1.init(&[0u8; 32], &[0u8; CHACHA20_NONCE_SIZE]);
     let mut chacha20_2 = ChaCha20::default();
     chacha20_2.init(&[0u8; 32], &[0u8; CHACHA20_NONCE_SIZE]);
-    let mut data = [0u8; 64 * 1000];
+    let mut data = vec![0u8; 64 * 1000];
     let data2 = data.clone();
 
     chacha20_1.process_in_place(&mut data);
-    let encrypted_sync = chacha20_2.process(&data2);
+    let encrypted_sync = chacha20_2.process(data2);
 
     assert_eq!(data.to_vec(), encrypted_sync);
   }

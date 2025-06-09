@@ -1,5 +1,5 @@
 use criterion::{
-  criterion_group, criterion_main, BenchmarkId, Criterion, PlotConfiguration, Throughput,
+  black_box, criterion_group, criterion_main, BenchmarkId, Criterion, PlotConfiguration, Throughput,
 };
 use secured_cipher::{
   algorithm::{chacha20::CHACHA20_NONCE_SIZE, Blake3Mac},
@@ -14,7 +14,7 @@ fn bench(c: &mut Criterion) {
   let plot_config = PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
   group.plot_config(plot_config);
 
-  let data_size = 100 * MB;
+  let data_size = 1024 * MB;
   let blocks_per_thread_options = [1000];
 
   for &blocks_per_thread in &blocks_per_thread_options {
@@ -71,7 +71,7 @@ fn bench(c: &mut Criterion) {
       &data_size,
       |b, &data_size| {
         let mut bytes = vec![0u8; data_size];
-        b.iter(|| unsigned_cipher.encrypt_in_place(&mut bytes));
+        b.iter(|| unsigned_cipher.encrypt_in_place(black_box(&mut bytes)));
       },
     );
   }

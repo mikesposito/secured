@@ -182,10 +182,10 @@ impl From<Vec<u8>> for SignedEnvelope {
 
     // Deserialize MAC
     offset += data_len;
-    let mac = bytes[offset..offset + 16].to_vec();
+    let mac = bytes[offset..offset + 32].to_vec();
 
     // If the MAC length is not 16, return an error
-    if mac.len() != 16 {
+    if mac.len() != 32 {
       panic!("Unexpected bytes length");
     }
 

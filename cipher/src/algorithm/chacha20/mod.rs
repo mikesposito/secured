@@ -1,4 +1,8 @@
 mod core;
+mod writer;
+
+pub use writer::ChaCha20Writer;
+
 pub use core::{permute, xor_bytes, Block, CHACHA20_NONCE_SIZE, CONSTANTS, STATE_WORDS};
 use core::{CHACHA20_BLOCK_SIZE, DEFAULT_BLOCKS_PER_THREAD};
 

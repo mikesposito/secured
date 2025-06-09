@@ -33,7 +33,7 @@ pub struct Enclave<T> {
   pub metadata: T,
 
   /// The encrypted data.
-  pub encrypted_bytes: Box<[u8]>,
+  pub encrypted_bytes: Vec<u8>,
 
   /// The nonce used in the encryption process, 8 bytes long (ChaCha20).
   pub nonce: [u8; NONCE_SIZE],
@@ -71,7 +71,7 @@ where
     Ok(Enclave {
       version: ENCLAVE_VERSION,
       metadata,
-      encrypted_bytes: envelope.into_boxed_slice(),
+      encrypted_bytes: envelope.into(),
       nonce,
       key_metadata,
     })
@@ -239,7 +239,7 @@ where
     Ok(Enclave {
       version: version as u8,
       metadata,
-      encrypted_bytes: encrypted_bytes.into_boxed_slice(),
+      encrypted_bytes: encrypted_bytes.into(),
       nonce,
       key_metadata,
     })

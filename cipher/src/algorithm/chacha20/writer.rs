@@ -1,8 +1,7 @@
 use std::{cmp, io::Write};
 
-use crate::Cipher;
-
 use super::core::CHACHA20_BLOCK_SIZE;
+use crate::Cipher;
 
 const CHUNK_SIZE: usize = CHACHA20_BLOCK_SIZE * 4096;
 
@@ -11,7 +10,8 @@ const CHUNK_SIZE: usize = CHACHA20_BLOCK_SIZE * 4096;
 pub struct ChaCha20Writer<W> {
   inner: W,
   cipher: Cipher,
-  buffer: Vec<u8>,
+  buffer: [u8; CHUNK_SIZE],
+  len: usize,
 }
 
 impl<W: Write> ChaCha20Writer<W> {
@@ -19,27 +19,32 @@ impl<W: Write> ChaCha20Writer<W> {
     Self {
       inner,
       cipher,
-      buffer: Vec::new(),
+      buffer: [0; CHUNK_SIZE],
+      len: 0,
     }
   }
 
   pub fn flush_buffer(&mut self) -> std::io::Result<()> {
-    if self.buffer.is_empty() {
+    if self.len == 0 {
       return Ok(());
     }
 
-    let mut bytes = self
-      .buffer
-      .drain(..cmp::min(self.buffer.len(), CHUNK_SIZE))
-      .collect::<Vec<u8>>();
-    self.cipher.encrypt_in_place(&mut bytes);
+    let bytes = &mut self.buffer[..self.len];
+    self.cipher.encrypt_in_place(bytes);
 
     self.inner.write_all(&bytes)?;
-    self.buffer.clear();
+    self.clear();
     Ok(())
   }
 
-  pub fn finalize(mut self) -> std::io::Result<()> {
+  pub fn clear(&mut self) {
+    self.len = 0;
+  }
+
+  pub fn finalize(mut self, zeroize: bool) -> std::io::Result<()> {
+    if zeroize {
+      self.buffer.fill(0);
+    }
     self.flush_buffer()?;
     self.inner.flush()
   }
@@ -47,13 +52,20 @@ impl<W: Write> ChaCha20Writer<W> {
 
 impl<W: Write> Write for ChaCha20Writer<W> {
   fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-    self.buffer.extend_from_slice(buf);
+    let bytes_to_write = cmp::min(buf.len(), CHUNK_SIZE - self.len);
+    if bytes_to_write == 0 {
+      return Ok(0);
+    }
+    let start = self.len;
+    let end = start + bytes_to_write;
+    self.buffer[start..end].copy_from_slice(&buf[..bytes_to_write]);
+    self.len += bytes_to_write;
 
-    if self.buffer.len() >= CHUNK_SIZE {
+    if self.len == CHUNK_SIZE {
       self.flush_buffer()?;
     }
 
-    Ok(buf.len())
+    Ok(bytes_to_write)
   }
 
   fn flush(&mut self) -> std::io::Result<()> {

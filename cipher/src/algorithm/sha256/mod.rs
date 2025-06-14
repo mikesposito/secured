@@ -40,10 +40,6 @@ impl Sha256 {
       ));
     }
 
-    if self.buffer.is_empty() {
-      return Ok(());
-    }
-
     // Divide the buffer into 64-byte blocks and process each block,
     // ignoring any remaining bytes that do not fill a complete block.
     while self.buffer.len() >= 64 {
@@ -130,7 +126,38 @@ mod test {
   use std::io::Write;
 
   #[test]
-  fn it_should_process_sha256() {
+  fn it_should_hash_empty_data() {
+    let mut hasher = Sha256::default();
+    hasher.write(b"").unwrap();
+    assert_eq!(
+      hasher.finalize().unwrap(),
+      [
+        0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9,
+        0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52,
+        0xb8, 0x55,
+      ]
+    );
+  }
+
+  #[test]
+  fn it_should_hash_one_million_a() {
+    let mut hasher = Sha256::default();
+    let data = "a".repeat(1_000_000).into_bytes();
+
+    hasher.write(&data).unwrap();
+
+    assert_eq!(
+      hasher.finalize().unwrap(),
+      [
+        0xcd, 0xc7, 0x6e, 0x5c, 0x99, 0x14, 0xfb, 0x92, 0x81, 0xa1, 0xc7, 0xe2, 0x84, 0xd7, 0x3e,
+        0x67, 0xf1, 0x80, 0x9a, 0x48, 0xa4, 0x97, 0x20, 0x0e, 0x04, 0x6d, 0x39, 0xcc, 0xc7, 0x11,
+        0x2c, 0xd0
+      ]
+    );
+  }
+
+  #[test]
+  fn it_should_hash_abc() {
     let mut hasher = Sha256::default();
     let data = b"abc";
 

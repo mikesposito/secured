@@ -7,6 +7,8 @@ pub mod poly1305;
 /// Module for the Blake3 message authentication code (MAC) algorithm.
 pub mod blake3;
 
+pub mod sha256;
+
 /// Re-exporting `ChaCha20` for direct use.
 pub use chacha20::ChaCha20;
 
@@ -15,6 +17,9 @@ pub use poly1305::{Poly1305, SignedEnvelope};
 
 /// Re-exporting `Blake3Mac` for direct use.
 pub use blake3::Blake3Mac;
+
+/// Re-exporting `Sha256` for direct use.
+pub use sha256::Sha256;
 
 pub trait AlgorithmKeyIVInit {
   /// Initializes the algorithm with a key and an initialization vector (IV).
@@ -65,6 +70,27 @@ pub trait AlgorithmProcessInPlace {
   /// # Returns
   /// A vector of bytes representing the processed data.
   fn process_in_place(&self, data: &mut [u8]);
+}
+
+pub trait Hasher {
+  /// Updates the hash with the provided data.
+  ///
+  /// This method processes the input data and updates the internal state of the hash.
+  /// It is typically used to feed data into the hash incrementally.
+  ///
+  /// # Arguments
+  /// * `data` - A byte slice of data to be hashed.
+  fn update(&mut self, data: &[u8]);
+
+  /// Finalizes the hash computation and returns the resulting hash value.
+  ///
+  /// This method completes the hash computation and returns the final hash value.
+  /// It is typically called after all data has been fed into the hash.
+  ///
+  /// # Returns
+  ///
+  /// A byte vector representing the final hash value.
+  fn finalize(&self) -> Vec<u8>;
 }
 
 pub trait AlgorithmCore: AlgorithmKeyIVInit + AlgorithmProcess + AlgorithmProcessInPlace {}

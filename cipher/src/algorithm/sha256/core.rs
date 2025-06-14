@@ -31,7 +31,7 @@ pub fn init_working_variables(hash: &Sha256Hash) -> WorkingVariables {
   ]
 }
 
-pub fn prepare_schedule(block: &[u32; 16]) -> MessageSchedule {
+pub fn schedule_from_block(block: &[u32; 16]) -> MessageSchedule {
   let mut schedule = [0u32; SCHEDULE_WORDS];
 
   // The first 16 words of the message schedule are the block itself.
@@ -69,6 +69,12 @@ pub fn compress_schedule(schedule: &MessageSchedule, v: &mut WorkingVariables) {
   }
 }
 
+pub fn compress_block(block: &[u32; 16], hash: &mut Sha256Hash) {
+  let mut v = init_working_variables(hash);
+  compress_schedule(&schedule_from_block(block), &mut v);
+  update_hash(hash, &v);
+}
+
 pub fn update_hash(hash: &mut Sha256Hash, v: &WorkingVariables) {
   for (h, w) in hash.iter_mut().zip(v.iter()) {
     *h = h.wrapping_add(*w);
@@ -91,20 +97,28 @@ pub fn big_sig1(x: u32) -> u32 {
   (x >> 6) ^ (x >> 11) ^ (x >> 25)
 }
 
-pub fn pad(data: &[u8]) -> Vec<u8> {
-  let mut padded = data.to_vec();
-  let bit_length = (data.len() as u64) * 8;
-
-  // Append a single '1' bit (0x80 in hex)
-  padded.push(0x80);
-
-  // Pad with '0' bits until the length is 56 bytes
-  while padded.len() % 64 != 56 {
-    padded.push(0x00);
+pub fn block_bytes_to_words(block: &[u8; 64]) -> [u32; 16] {
+  let mut words = [0u32; 16];
+  for (i, word) in block.chunks(4).enumerate() {
+    words[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
   }
+  words
+}
 
-  // Append the length of the original message as a 64-bit big-endian integer
-  padded.extend_from_slice(&bit_length.to_be_bytes());
-
-  padded
+pub fn pad(block: &mut [u8; 64], byte_length: usize) {
+  assert!(
+    byte_length <= 64,
+    "Block size must not exceed 64 bytes for SHA-256 padding."
+  );
+  // Append '1' bit (0x80)
+  block[byte_length] = 0x80;
+  // Zero out everything after the '1' bit
+  for i in byte_length + 1..64 {
+    block[i] = 0;
+  }
+  // Write bit length as 64-bit big-endian integer at the end of the block
+  let bit_length = (byte_length as u64) * 8;
+  let length_bytes = bit_length.to_be_bytes();
+  // Write the length into the last 8 bytes of the block
+  block[56..64].copy_from_slice(&length_bytes);
 }

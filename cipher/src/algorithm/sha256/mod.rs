@@ -15,7 +15,6 @@ pub struct Sha256 {
 
 impl Default for Sha256 {
   fn default() -> Self {
-    println!("Hash update: {:?}", INITIAL_HASH);
     Self {
       hash: INITIAL_HASH,
       buffer: Buffer::new(),
@@ -79,7 +78,6 @@ impl Sha256 {
       } else {
         // If the remainder is less than 56 bytes, we can pad the current block
         // and write the length at the end.
-        println!("The total bytes written: {:?}", bit_length_bytes);
         block[56..64].copy_from_slice(&bit_length_bytes);
         self.process_block(&block_bytes_to_words(&block));
       }
@@ -102,7 +100,6 @@ impl Sha256 {
 
   fn process_block(&mut self, block: &[u32; 16]) {
     compress_block(block, &mut self.hash);
-    println!("Hash update: {:?}", self.hash);
   }
 }
 

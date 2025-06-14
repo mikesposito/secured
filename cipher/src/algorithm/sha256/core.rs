@@ -25,13 +25,27 @@ pub type MessageSchedule = [u32; SCHEDULE_WORDS];
 
 pub type WorkingVariables = [u32; 8];
 
-pub fn init_working_variables(hash: &Sha256Hash) -> WorkingVariables {
+pub fn compress_block(block: &[u32; 16], hash: &mut Sha256Hash) {
+  let mut v = init_working_variables(hash);
+  compress_schedule(&schedule_from_block(block), &mut v);
+  update_hash(hash, &v);
+}
+
+pub fn block_bytes_to_words(block: &[u8; 64]) -> [u32; 16] {
+  let mut words = [0u32; 16];
+  for (i, word) in block.chunks(4).enumerate() {
+    words[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+  }
+  words
+}
+
+fn init_working_variables(hash: &Sha256Hash) -> WorkingVariables {
   [
     hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
   ]
 }
 
-pub fn schedule_from_block(block: &[u32; 16]) -> MessageSchedule {
+fn schedule_from_block(block: &[u32; 16]) -> MessageSchedule {
   let mut schedule = [0u32; SCHEDULE_WORDS];
 
   // The first 16 words of the message schedule are the block itself.
@@ -49,14 +63,15 @@ pub fn schedule_from_block(block: &[u32; 16]) -> MessageSchedule {
   schedule
 }
 
-pub fn compress_schedule(schedule: &MessageSchedule, v: &mut WorkingVariables) {
+fn compress_schedule(schedule: &MessageSchedule, v: &mut WorkingVariables) {
   for i in 0..SCHEDULE_WORDS {
     let t1 = v[7]
       .wrapping_add(big_sig1(v[4]))
+      .wrapping_add(ch(v[4], v[5], v[6]))
       .wrapping_add(schedule[i])
       .wrapping_add(K[i]);
 
-    let t2 = big_sig0(v[0]).wrapping_add(v[0] & v[1] ^ v[0] & v[2] ^ v[1] & v[2]);
+    let t2 = big_sig0(v[0]).wrapping_add(maj(v[0], v[1], v[2]));
 
     v[7] = v[6];
     v[6] = v[5];
@@ -69,56 +84,36 @@ pub fn compress_schedule(schedule: &MessageSchedule, v: &mut WorkingVariables) {
   }
 }
 
-pub fn compress_block(block: &[u32; 16], hash: &mut Sha256Hash) {
-  let mut v = init_working_variables(hash);
-  compress_schedule(&schedule_from_block(block), &mut v);
-  update_hash(hash, &v);
+fn maj(x: u32, y: u32, z: u32) -> u32 {
+  (x & y) ^ (x & z) ^ (y & z)
 }
 
-pub fn update_hash(hash: &mut Sha256Hash, v: &WorkingVariables) {
+fn ch(x: u32, y: u32, z: u32) -> u32 {
+  (x & y) ^ ((!x) & z)
+}
+
+fn update_hash(hash: &mut Sha256Hash, v: &WorkingVariables) {
   for (h, w) in hash.iter_mut().zip(v.iter()) {
     *h = h.wrapping_add(*w);
   }
 }
 
-pub fn sig0(x: u32) -> u32 {
-  (x >> 7) ^ (x >> 18) ^ (x >> 3)
+fn rotr(x: u32, n: u32) -> u32 {
+  (x >> n) | (x << (32 - n))
 }
 
-pub fn sig1(x: u32) -> u32 {
-  (x >> 17) ^ (x >> 19) ^ (x >> 10)
+fn sig0(x: u32) -> u32 {
+  rotr(x, 7) ^ rotr(x, 18) ^ (x >> 3)
 }
 
-pub fn big_sig0(x: u32) -> u32 {
-  (x >> 2) ^ (x >> 13) ^ (x >> 22)
+fn sig1(x: u32) -> u32 {
+  rotr(x, 17) ^ rotr(x, 19) ^ (x >> 10)
 }
 
-pub fn big_sig1(x: u32) -> u32 {
-  (x >> 6) ^ (x >> 11) ^ (x >> 25)
+fn big_sig0(x: u32) -> u32 {
+  rotr(x, 2) ^ rotr(x, 13) ^ rotr(x, 22)
 }
 
-pub fn block_bytes_to_words(block: &[u8; 64]) -> [u32; 16] {
-  let mut words = [0u32; 16];
-  for (i, word) in block.chunks(4).enumerate() {
-    words[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
-  }
-  words
-}
-
-pub fn pad(block: &mut [u8; 64], byte_length: usize) {
-  assert!(
-    byte_length <= 64,
-    "Block size must not exceed 64 bytes for SHA-256 padding."
-  );
-  // Append '1' bit (0x80)
-  block[byte_length] = 0x80;
-  // Zero out everything after the '1' bit
-  for i in byte_length + 1..64 {
-    block[i] = 0;
-  }
-  // Write bit length as 64-bit big-endian integer at the end of the block
-  let bit_length = (byte_length as u64) * 8;
-  let length_bytes = bit_length.to_be_bytes();
-  // Write the length into the last 8 bytes of the block
-  block[56..64].copy_from_slice(&length_bytes);
+fn big_sig1(x: u32) -> u32 {
+  rotr(x, 6) ^ rotr(x, 11) ^ rotr(x, 25)
 }

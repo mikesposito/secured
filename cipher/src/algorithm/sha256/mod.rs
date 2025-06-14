@@ -1,7 +1,7 @@
 pub mod core;
 
 use super::buffer::Buffer;
-use core::{block_bytes_to_words, compress_block, pad, Sha256Hash, INITIAL_HASH};
+use core::{block_bytes_to_words, compress_block, Sha256Hash, INITIAL_HASH};
 use std::io::{Read, Write};
 
 // 10 * 64 = 640 bytes (10 blocks of 64 bytes each)
@@ -15,6 +15,7 @@ pub struct Sha256 {
 
 impl Default for Sha256 {
   fn default() -> Self {
+    println!("Hash update: {:?}", INITIAL_HASH);
     Self {
       hash: INITIAL_HASH,
       buffer: Buffer::new(),
@@ -31,7 +32,7 @@ impl Sha256 {
     self.finalized = false;
   }
 
-  fn flush_buffer(&mut self, finalize_remainder: bool) -> std::io::Result<()> {
+  fn process_buffer(&mut self, finalize_remainder: bool) -> std::io::Result<()> {
     // If the hasher is finalized, we cannot process any more data.
     if self.finalized {
       return Err(std::io::Error::new(
@@ -43,44 +44,65 @@ impl Sha256 {
     if self.buffer.is_empty() {
       return Ok(());
     }
-    // Divide the buffer into 64-byte chunks and process each chunk,
-    // ignoring any remaining bytes that do not fill a complete chunk.
+
+    // Divide the buffer into 64-byte blocks and process each block,
+    // ignoring any remaining bytes that do not fill a complete block.
     while self.buffer.len() >= 64 {
       // Read 64 bytes
-      let mut chunk = [0u8; 64];
-      self.buffer.read_exact(&mut chunk)?;
+      let mut block = [0u8; 64];
+      self.buffer.read_exact(&mut block)?;
       // Process
-      self.process_block(&block_bytes_to_words(&chunk));
+      self.process_block(&block_bytes_to_words(&block));
     }
 
     // If we are finalizing, pad the remaining bytes and process the last block.
-    // If not, just clear the buffer.
     if finalize_remainder {
       let remainder = self.buffer.len();
-      let mut padded_chunk = [0u8; 64];
-      self.buffer.read_exact(&mut padded_chunk)?;
-      pad(&mut padded_chunk, remainder);
-      // Process the last block
-      self.process_block(&block_bytes_to_words(&padded_chunk));
+      let bit_length = (self.buffer.total_bytes_written() as u64) * 8;
+      let bit_length_bytes = bit_length.to_be_bytes();
+      let mut block = [0u8; 64];
+      self.buffer.read_exact(&mut block[..remainder])?;
+
+      // Pad the current block adding a 1 bit (0x80) at the end of the data
+      // and leaving the rest as zeroes.
+      block[remainder] = 0x80;
+
+      if remainder >= 56 {
+        // If the remainder is 56 bytes or more, we need to process the current block
+        // and then prepare a second block with the length at the end.
+        self.process_block(&block_bytes_to_words(&block));
+
+        // Prepare and process second empty block, with the length at the end
+        let mut final_block = [0u8; 64];
+        final_block[56..64].copy_from_slice(&bit_length_bytes);
+        self.process_block(&block_bytes_to_words(&final_block));
+      } else {
+        // If the remainder is less than 56 bytes, we can pad the current block
+        // and write the length at the end.
+        println!("The total bytes written: {:?}", bit_length_bytes);
+        block[56..64].copy_from_slice(&bit_length_bytes);
+        self.process_block(&block_bytes_to_words(&block));
+      }
+
       self.finalized = true;
     }
 
     Ok(())
   }
 
-  fn finalize(&mut self) -> std::io::Result<Vec<u8>> {
-    self.flush_buffer(true)?;
+  pub fn finalize(&mut self) -> std::io::Result<[u8; 32]> {
+    self.process_buffer(true)?;
 
-    let mut result = Vec::with_capacity(32);
-    for &word in &self.hash {
-      result.extend_from_slice(&word.to_be_bytes());
+    let mut result = [0u8; 32];
+    for (i, &word) in self.hash.iter().enumerate() {
+      result[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes());
     }
-
     Ok(result)
   }
 
   fn process_block(&mut self, block: &[u32; 16]) {
     compress_block(block, &mut self.hash);
+    println!("Hash update: {:?}", self.hash);
   }
 }
 
@@ -90,13 +112,10 @@ impl Write for Sha256 {
 
     // Write data to the buffer.
     for chunk in data.chunks(SHA256_BUFFER_SIZE) {
-      let len = chunk.len();
-      self.buffer.write(chunk)?;
-      bytes_written += len;
-
+      bytes_written += self.buffer.write(chunk)?;
       // If the buffer is full, flush it.
       if self.buffer.len() >= SHA256_BUFFER_SIZE {
-        self.flush_buffer(false)?;
+        self.process_buffer(false)?;
       }
     }
 
@@ -104,8 +123,6 @@ impl Write for Sha256 {
   }
 
   fn flush(&mut self) -> std::io::Result<()> {
-    // Finalize the hash and return the result.
-    self.finalize()?;
     Ok(())
   }
 }

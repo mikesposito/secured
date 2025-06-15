@@ -5,7 +5,7 @@ use core::{block_bytes_to_words, compress_block, Sha256Hash, INITIAL_HASH};
 use std::io::{Read, Write};
 
 // 10 * 64 = 640 bytes (10 blocks of 64 bytes each)
-const SHA256_BUFFER_SIZE: usize = 640;
+const SHA256_BUFFER_SIZE: usize = 64;
 
 pub struct Sha256 {
   hash: Sha256Hash,
@@ -102,18 +102,8 @@ impl Sha256 {
 
 impl Write for Sha256 {
   fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-    let mut bytes_written = 0;
-
-    while bytes_written < data.len() {
-      if self.buffer.is_full() {
-        // If the buffer is full, process it before writing more data.
-        self.process_buffer(false)?;
-      }
-
-      // Write as many bytes as possible to the buffer.
-      bytes_written += self.buffer.write(&data[bytes_written..])?;
-    }
-
+    let bytes_written = self.buffer.write(&data)?;
+    self.process_buffer(false)?;
     Ok(bytes_written)
   }
 
@@ -130,7 +120,9 @@ mod test {
   #[test]
   fn it_should_hash_empty_data() {
     let mut hasher = Sha256::default();
-    hasher.write(b"").unwrap();
+
+    hasher.write_all(b"").unwrap();
+
     assert_eq!(
       hasher.finalize().unwrap(),
       [
@@ -146,7 +138,7 @@ mod test {
     let mut hasher = Sha256::default();
     let data = "a".repeat(1_000_000).into_bytes();
 
-    hasher.write(&data).unwrap();
+    hasher.write_all(&data).unwrap();
 
     assert_eq!(
       hasher.finalize().unwrap(),
@@ -163,7 +155,7 @@ mod test {
     let mut hasher = Sha256::default();
     let data = b"abc";
 
-    hasher.write(data).unwrap();
+    hasher.write_all(data).unwrap();
 
     assert_eq!(
       hasher.finalize().unwrap(),

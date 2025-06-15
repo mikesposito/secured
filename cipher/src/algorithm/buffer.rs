@@ -49,6 +49,10 @@ impl<const SIZE: usize> Write for Buffer<SIZE> {
     let bytes_to_write = bytes.len().min(self.available_space());
     let slice_range = self.len..(self.len + bytes_to_write);
 
+    if bytes_to_write == 0 {
+      return Ok(0);
+    }
+
     self.data.get_mut()[slice_range].copy_from_slice(&bytes[..bytes_to_write]);
     self.len += bytes_to_write;
     self.total_bytes_written += bytes_to_write;
@@ -65,6 +69,9 @@ impl<const SIZE: usize> Read for Buffer<SIZE> {
   fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
     let bytes_read = self.data.read(buf)?;
     self.len -= bytes_read.min(self.len);
+    self
+      .data
+      .set_position(self.data.position() - bytes_read as u64);
     Ok(bytes_read)
   }
 }

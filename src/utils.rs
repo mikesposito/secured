@@ -260,7 +260,7 @@ pub fn decrypt_files(
                 // if the optimistic decryption fails, we try again with the password
                 cached_encryption_key = enclave
                   .recover_key(password.as_bytes())
-                  .or(Err(format!("Unable to recover encryption key")))?
+                  .or(Err("Unable to recover encryption key".to_string()))?
                   .pubk;
                 enclave.decrypt(cached_encryption_key)
               }
@@ -277,7 +277,7 @@ pub fn decrypt_files(
             )))?;
 
           if wipe {
-            std::fs::remove_file(filename).or(Err(format!("Unable to remove file")))?;
+            std::fs::remove_file(filename).or(Err("Unable to remove file".to_string()))?;
           }
         }
 
@@ -355,7 +355,7 @@ pub fn decrypt_and_unpack_files(
                 // if the optimistic decryption fails, we try again with the password
                 cached_encryption_key = enclave
                   .recover_key(password.as_bytes())
-                  .or(Err(format!("Unable to recover encryption key")))?
+                  .or(Err("Unable to recover encryption key".to_string()))?
                   .pubk;
                 enclave.decrypt(cached_encryption_key)
               }
@@ -370,7 +370,7 @@ pub fn decrypt_and_unpack_files(
             filename
           )))?;
           if wipe {
-            std::fs::remove_file(filename).or(Err(format!("Unable to remove file")))?;
+            std::fs::remove_file(filename).or(Err("Unable to remove file".to_string()))?;
           }
         }
         progress.tick();
@@ -517,7 +517,7 @@ pub(crate) fn inspect_files(path: Vec<String>) -> Result<(), String> {
 
         let enclave = enclave.unwrap();
         let envelope =
-          SignedEnvelope::try_from(enclave.encrypted_bytes.to_vec()).expect("Invalid envelope");
+          SignedEnvelope::from(enclave.encrypted_bytes.to_vec());
 
         println!(" ------------------------------ ");
         println!("📦 > File\t\t\t {}\n", filename);

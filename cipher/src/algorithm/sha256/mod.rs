@@ -31,13 +31,18 @@ impl Sha256 {
     self.finalized = false;
   }
 
-  fn process_buffer(&mut self, finalize: bool) -> std::io::Result<()> {
+  fn process_buffer(&mut self) -> std::io::Result<()> {
     // If the hasher is finalized, we cannot process any more data.
     if self.finalized {
       return Err(std::io::Error::new(
         std::io::ErrorKind::Other,
         "Cannot write to a finalized hasher",
       ));
+    }
+
+    // We only want to process full blocks of 64 bytes here.
+    if self.buffer.len() < 64 {
+      return Ok(());
     }
 
     // Divide the buffer into 64-byte blocks and process each block,
@@ -50,42 +55,40 @@ impl Sha256 {
       self.process_block(&block_bytes_to_words(&block));
     }
 
-    // If we are finalizing, pad the remaining bytes and process the last block.
-    if finalize {
-      let remainder = self.buffer.len();
-      let bit_length = (self.buffer.total_bytes_written() as u64) * 8;
-      let bit_length_bytes = bit_length.to_be_bytes();
-      let mut block = [0u8; 64];
-      self.buffer.read_exact(&mut block[..remainder])?;
-
-      // Pad the current block adding a 1 bit (0x80) at the end of the data
-      // and leaving the rest as zeroes.
-      block[remainder] = 0x80;
-
-      if remainder >= 56 {
-        // If the remainder is 56 bytes or more, we need to process the current block
-        // and then prepare a second block with the length at the end.
-        self.process_block(&block_bytes_to_words(&block));
-
-        // Prepare and process second empty block, with the length at the end
-        let mut final_block = [0u8; 64];
-        final_block[56..64].copy_from_slice(&bit_length_bytes);
-        self.process_block(&block_bytes_to_words(&final_block));
-      } else {
-        // If the remainder is less than 56 bytes, we can pad the current block
-        // and write the length at the end.
-        block[56..64].copy_from_slice(&bit_length_bytes);
-        self.process_block(&block_bytes_to_words(&block));
-      }
-
-      self.finalized = true;
-    }
-
     Ok(())
   }
 
   pub fn finalize(&mut self) -> std::io::Result<[u8; 32]> {
-    self.process_buffer(true)?;
+    // Process any remaining full blocks in the buffer.
+    self.process_buffer()?;
+
+    let remainder = self.buffer.len();
+    let bit_length = (self.buffer.total_bytes_written() as u64) * 8;
+    let bit_length_bytes = bit_length.to_be_bytes();
+
+    let mut block = [0u8; 64];
+    self.buffer.read_exact(&mut block[..remainder])?;
+    // Pad the current block adding a 1 bit (0x80) at the end of the data
+    // and leaving the rest as zeroes.
+    block[remainder] = 0x80;
+
+    if remainder >= 56 {
+      // If the remainder is 56 bytes or more, we need to process the current block
+      // and then prepare a second block with the length at the end.
+      self.process_block(&block_bytes_to_words(&block));
+
+      // Prepare and process second empty block, with the length at the end
+      let mut final_block = [0u8; 64];
+      final_block[56..64].copy_from_slice(&bit_length_bytes);
+      self.process_block(&block_bytes_to_words(&final_block));
+    } else {
+      // If the remainder is less than 56 bytes, we can pad the current block
+      // and write the length at the end.
+      block[56..64].copy_from_slice(&bit_length_bytes);
+      self.process_block(&block_bytes_to_words(&block));
+    }
+
+    self.finalized = true;
 
     let mut result = [0u8; 32];
     for (i, &word) in self.hash.iter().enumerate() {
@@ -103,7 +106,7 @@ impl Sha256 {
 impl Write for Sha256 {
   fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
     let bytes_written = self.buffer.write(&data)?;
-    self.process_buffer(false)?;
+    self.process_buffer()?;
     Ok(bytes_written)
   }
 

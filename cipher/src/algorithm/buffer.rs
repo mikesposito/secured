@@ -19,6 +19,14 @@ impl<const SIZE: usize> Buffer<SIZE> {
     self.len == 0
   }
 
+  pub fn is_full(&self) -> bool {
+    self.len == SIZE
+  }
+
+  pub fn available_space(&self) -> usize {
+    SIZE - self.len
+  }
+
   pub fn len(&self) -> usize {
     self.len
   }
@@ -38,10 +46,10 @@ impl<const SIZE: usize> Buffer<SIZE> {
 
 impl<const SIZE: usize> Write for Buffer<SIZE> {
   fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-    let bytes_to_write = bytes.len().min(SIZE - self.len);
+    let bytes_to_write = bytes.len().min(self.available_space());
     let slice_range = self.len..(self.len + bytes_to_write);
 
-    self.data.get_mut()[slice_range].copy_from_slice(bytes);
+    self.data.get_mut()[slice_range].copy_from_slice(&bytes[..bytes_to_write]);
     self.len += bytes_to_write;
     self.total_bytes_written += bytes_to_write;
 

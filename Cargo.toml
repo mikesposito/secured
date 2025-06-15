@@ -37,6 +37,9 @@ version = "^0.17.0"
 [dependencies.hex]
 version = "^0.4.3"
 
+[dependencies.tar]
+version = "0.4.44"
+
 [[bin]]
 name = "secured"
 path = "src/main.rs"

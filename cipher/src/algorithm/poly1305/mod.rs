@@ -118,11 +118,11 @@ impl AlgorithmProcess for Poly1305 {
   /// 16-byte blocks, the final block is padded as necessary.
   ///
   /// # Arguments
-  /// * `data` - A byte slice representing the data to be processed.
+  /// * `data` - A byte vector representing the data to be processed.
   ///
   /// # Returns
   /// A vector of bytes (`Vec<u8>`) containing the computed MAC.
-  fn process(&mut self, data: &[u8]) -> Vec<u8> {
+  fn process(&mut self, data: Vec<u8>) -> Vec<u8> {
     let blocks = data.chunks_exact(16);
     let partial = blocks.remainder();
 
@@ -182,10 +182,10 @@ impl From<Vec<u8>> for SignedEnvelope {
 
     // Deserialize MAC
     offset += data_len;
-    let mac = bytes[offset..offset + 16].to_vec();
+    let mac = bytes[offset..offset + 32].to_vec();
 
     // If the MAC length is not 16, return an error
-    if mac.len() != 16 {
+    if mac.len() != 32 {
       panic!("Unexpected bytes length");
     }
 

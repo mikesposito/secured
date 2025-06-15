@@ -16,3 +16,18 @@ secured-cipher = { path = "../cipher/" }
 name = "chacha20"
 path = "src/chacha20.rs"
 harness = false
+
+[[bench]]
+name = "chacha20-in-place"
+path = "src/chacha20-in-place.rs"
+harness = false
+
+[[bench]]
+name = "chacha20-blocks-per-thread"
+path = "src/chacha20-blocks-per-thread.rs"
+harness = false
+
+[[bench]]
+name = "cipher-signed-vs-unsigned"
+path = "src/cipher-signed-vs-unsigned.rs"
+harness = false

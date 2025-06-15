@@ -13,4 +13,8 @@ path = "./key"
 version = "0.3.0"
 
 [dependencies.rayon]
-version = "1.8.0"
+version = "1.10.0"
+
+[dependencies.blake3]
+version = "1.4.2"
+features = ["rayon"]

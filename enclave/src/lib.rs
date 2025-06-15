@@ -1,16 +1,21 @@
+pub mod envelopes;
 pub mod errors;
 pub mod traits;
 
+pub use envelopes::KeyMetadata;
 pub use errors::EnclaveError;
-pub use traits::{Decryptable, Encryptable};
-
 pub use secured_cipher::{
   algorithm::chacha20::CHACHA20_NONCE_SIZE, random_bytes, Cipher, Key, KeyDerivationStrategy,
   SignedEnvelope,
 };
+pub use traits::{Decryptable, Encryptable};
+
+use byteorder::{LittleEndian, ReadBytesExt};
+use std::io::Read;
 
 const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = CHACHA20_NONCE_SIZE;
+const ENCLAVE_VERSION: u8 = 1;
 
 /// `Enclave` acts as a container for encrypted data, including metadata and the encrypted content itself.
 ///
@@ -21,14 +26,20 @@ const NONCE_SIZE: usize = CHACHA20_NONCE_SIZE;
 /// * `T`: The type of metadata associated with the encrypted data.
 #[derive(Debug, Clone)]
 pub struct Enclave<T> {
+  /// The enclave version, used to manage compatibility.
+  pub version: u8,
+
   /// Metadata associated with the encrypted data.
   pub metadata: T,
 
   /// The encrypted data.
-  pub encrypted_bytes: Box<[u8]>,
+  pub encrypted_bytes: Vec<u8>,
 
   /// The nonce used in the encryption process, 8 bytes long (ChaCha20).
   pub nonce: [u8; NONCE_SIZE],
+
+  /// Optional key metadata, which includes the salt and key derivation strategy.
+  pub key_metadata: Option<KeyMetadata>,
 }
 
 impl<T> Enclave<T>
@@ -48,20 +59,21 @@ where
     metadata: T,
     key: [u8; KEY_SIZE],
     plain_bytes: Vec<u8>,
+    key_metadata: Option<KeyMetadata>,
   ) -> Result<Self, String> {
     let nonce = random_bytes::<NONCE_SIZE>();
     let mut cipher = Cipher::default();
     cipher.init(&key, &nonce);
 
-    let encrypted_bytes = cipher.encrypt(&plain_bytes);
-    let envelope: Vec<u8> = cipher
-      .sign(&metadata.clone().into(), &encrypted_bytes)
-      .into();
+    let encrypted_bytes = cipher.encrypt(plain_bytes);
+    let envelope: Vec<u8> = cipher.sign(metadata.clone().into(), encrypted_bytes).into();
 
     Ok(Enclave {
+      version: ENCLAVE_VERSION,
       metadata,
-      encrypted_bytes: envelope.into_boxed_slice(),
+      encrypted_bytes: envelope.into(),
       nonce,
+      key_metadata,
     })
   }
 
@@ -78,7 +90,7 @@ where
     Ok(
       Cipher::default()
         .init(&key, &self.nonce)
-        .decrypt_and_verify(&envelope)?,
+        .decrypt_and_verify(envelope)?,
     )
   }
 
@@ -89,19 +101,18 @@ where
   ///
   /// # Returns
   /// A `Result` containing the recovered key, or an error string if recovery fails.
-  pub fn recover_key(
-    encrypted_bytes: &[u8],
-    password: &[u8],
-  ) -> Result<Key<KEY_SIZE, 16>, EnclaveError> {
-    let strategy = KeyDerivationStrategy::try_from(
-      encrypted_bytes[encrypted_bytes.len() - 9..encrypted_bytes.len()].to_vec(),
-    )?;
-    let salt: [u8; 16] = encrypted_bytes[encrypted_bytes.len() - 25..encrypted_bytes.len() - 9]
-      .try_into()
-      .unwrap();
-    let key = Key::<KEY_SIZE, 16>::with_salt(password, salt, strategy);
-
-    Ok(key)
+  pub fn recover_key(&self, password: &[u8]) -> Result<Key<KEY_SIZE, 16>, EnclaveError> {
+    if let Some(key_metadata) = &self.key_metadata {
+      Ok(Key::<KEY_SIZE, 16>::with_salt(
+        password,
+        key_metadata.salt,
+        key_metadata.strategy.clone(),
+      ))
+    } else {
+      Err(EnclaveError::Deserialization(
+        "No key metadata found".to_string(),
+      ))
+    }
   }
 }
 
@@ -117,13 +128,28 @@ where
   /// # Returns
   /// A `Vec<u8>` representing the serialized enclave.
   fn from(enclave: Enclave<T>) -> Vec<u8> {
-    let mut bytes: Vec<u8> = vec![];
-    let metadata_bytes = enclave.metadata.into();
+    let mut bytes = Vec::new();
 
-    bytes.append(&mut vec![u8::try_from(metadata_bytes.len()).unwrap()]);
-    bytes.append(&mut metadata_bytes.into());
-    bytes.append(&mut enclave.encrypted_bytes.into());
-    bytes.append(&mut enclave.nonce.to_vec());
+    // version (4 bytes)
+    bytes.extend((enclave.version as u32).to_le_bytes());
+
+    // metadata (length + bytes)
+    let metadata_bytes: Vec<u8> = enclave.metadata.into();
+    bytes.extend((metadata_bytes.len() as u32).to_le_bytes());
+    bytes.extend(metadata_bytes);
+
+    // encrypted_bytes (length + bytes)
+    bytes.extend((enclave.encrypted_bytes.len() as u32).to_le_bytes());
+    bytes.extend(&enclave.encrypted_bytes);
+
+    // nonce (fixed size)
+    bytes.extend(&enclave.nonce);
+
+    // key_metadata (optional)
+    if let Some(key_metadata) = enclave.key_metadata {
+      let key_metadata_bytes: Vec<u8> = key_metadata.into();
+      bytes.extend(key_metadata_bytes);
+    }
 
     bytes
   }
@@ -146,24 +172,76 @@ where
     if bytes.len() == 0 {
       return Err(EnclaveError::Deserialization("No bytes found".to_string()));
     }
-    let metadata_len = bytes[0];
-    if usize::from(metadata_len) > bytes.len() {
+    let mut cursor = std::io::Cursor::new(bytes);
+
+    // version (single u32 word)
+    let version = cursor
+      .read_u32::<LittleEndian>()
+      .or(Err(EnclaveError::Deserialization(
+        "unexpected bytes length when reading version".to_string(),
+      )))?;
+    if version != ENCLAVE_VERSION as u32 {
       return Err(EnclaveError::Deserialization(
-        "unexpected metadata length".to_string(),
+        "unsupported enclave version".to_string(),
       ));
     }
-    let metadata = T::try_from(bytes[1..metadata_len as usize + 1].to_vec()).or(Err(
-      EnclaveError::Deserialization("error deserializing metadata".to_string()),
-    ))?;
-    let encrypted_bytes = bytes[metadata_len as usize + 1..bytes.len() - NONCE_SIZE].to_vec();
-    let nonce = bytes[bytes.len() - NONCE_SIZE..bytes.len()].to_vec();
+
+    // metadata (length + data)
+    let metadata_len = cursor
+      .read_u32::<LittleEndian>()
+      .or(Err(EnclaveError::Deserialization(
+        "unexpected bytes length when reading metadata length".to_string(),
+      )))? as usize;
+    let mut metadata_bytes = vec![0u8; metadata_len];
+    cursor
+      .read_exact(&mut metadata_bytes)
+      .or(Err(EnclaveError::Deserialization(
+        "error deserializing metadata".to_string(),
+      )))?;
+    let metadata = T::try_from(metadata_bytes).or(Err(EnclaveError::Deserialization(
+      "error deserializing metadata".to_string(),
+    )))?;
+
+    // encrypted bytes (length + data)
+    let encrypted_len = cursor
+      .read_u32::<LittleEndian>()
+      .or(Err(EnclaveError::Deserialization(
+        "unexpected bytes length when reading encrypted bytes length".to_string(),
+      )))? as usize;
+    let mut encrypted_bytes = vec![0u8; encrypted_len];
+    cursor
+      .read_exact(&mut encrypted_bytes)
+      .or(Err(EnclaveError::Deserialization(
+        "error deserializing encrypted bytes".to_string(),
+      )))?;
+
+    // nonce (exact size)
+    let mut nonce = [0u8; NONCE_SIZE];
+    cursor
+      .read_exact(&mut nonce)
+      .or(Err(EnclaveError::Deserialization(
+        "error deserializing metadata".to_string(),
+      )))?;
+
+    // key_metadata (optional)
+    let mut key_metadata_bytes = vec![];
+    cursor
+      .read_to_end(&mut key_metadata_bytes)
+      .or(Err(EnclaveError::Deserialization(
+        "error deserializing key metadata".to_string(),
+      )))?;
+    let key_metadata = if !key_metadata_bytes.is_empty() {
+      Some(KeyMetadata::try_from(key_metadata_bytes)?)
+    } else {
+      None
+    };
 
     Ok(Enclave {
+      version: version as u8,
       metadata,
-      encrypted_bytes: encrypted_bytes.into_boxed_slice(),
-      nonce: nonce.try_into().or(Err(EnclaveError::Deserialization(
-        "unexpected bytes length".to_string(),
-      )))?,
+      encrypted_bytes: encrypted_bytes.into(),
+      nonce,
+      key_metadata,
     })
   }
 }
@@ -197,9 +275,17 @@ impl Encryptable<KEY_SIZE> for Vec<u8> {
   /// A `Vec<u8>` containing the encrypted data.
   fn encrypt(&self, password: String, strategy: KeyDerivationStrategy) -> Vec<u8> {
     let key: Key<32, 16> = Key::new(password.as_bytes(), strategy.clone());
-    let enclave = Enclave::from_plain_bytes(vec![], key.pubk, self.clone()).unwrap();
-
-    [enclave.into(), key.salt.to_vec(), strategy.into()].concat()
+    Enclave::from_plain_bytes(
+      vec![],
+      key.pubk,
+      self.clone(),
+      Some(KeyMetadata {
+        salt: key.salt,
+        strategy,
+      }),
+    )
+    .unwrap()
+    .into()
   }
 
   /// Encrypts a vector of bytes using a provided key.
@@ -210,13 +296,17 @@ impl Encryptable<KEY_SIZE> for Vec<u8> {
   /// # Returns
   /// A `Vec<u8>` containing the encrypted data.
   fn encrypt_with_key(&self, key: &Key<32, 16>) -> Vec<u8> {
-    let enclave = Enclave::from_plain_bytes(vec![], key.pubk, self.clone()).unwrap();
-    [
-      enclave.into(),
-      key.salt.to_vec(),
-      key.strategy.clone().into(),
-    ]
-    .concat()
+    Enclave::from_plain_bytes(
+      vec![],
+      key.pubk,
+      self.clone(),
+      Some(KeyMetadata {
+        salt: key.salt,
+        strategy: key.strategy.clone(),
+      }),
+    )
+    .unwrap()
+    .into()
   }
 
   /// Encrypts a vector of bytes using a provided key.
@@ -227,8 +317,9 @@ impl Encryptable<KEY_SIZE> for Vec<u8> {
   /// # Returns
   /// A `Vec<u8>` containing the encrypted data.
   fn encrypt_with_raw_key(&self, key: [u8; KEY_SIZE]) -> Vec<u8> {
-    let enclave = Enclave::from_plain_bytes(vec![], key, self.clone()).unwrap();
-    enclave.into()
+    Enclave::from_plain_bytes(vec![], key, self.clone(), None)
+      .unwrap()
+      .into()
   }
 
   /// Encrypts a vector of bytes using a provided key and metadata.
@@ -243,8 +334,9 @@ impl Encryptable<KEY_SIZE> for Vec<u8> {
   where
     M: From<Vec<u8>> + Into<Vec<u8>> + Clone,
   {
-    let enclave = Enclave::from_plain_bytes(metadata, key, self.clone()).unwrap();
-    enclave.into()
+    Enclave::from_plain_bytes(metadata, key, self.clone(), None)
+      .unwrap()
+      .into()
   }
 }
 
@@ -257,13 +349,20 @@ impl Decryptable<KEY_SIZE> for Vec<u8> {
   /// # Returns
   /// A `Result` containing the decrypted data as a vector of bytes, or an error string if decryption fails.
   fn decrypt(&self, password: String) -> Result<Vec<u8>, EnclaveError> {
-    let strategy = KeyDerivationStrategy::try_from(self[self.len() - 9..self.len()].to_vec())?;
-    let salt: [u8; 16] = self[self.len() - 25..self.len() - 9].try_into().unwrap();
-    let key = Key::<KEY_SIZE, 16>::with_salt(password.as_bytes(), salt, strategy);
+    let enclave = Enclave::<Vec<u8>>::try_from(self.clone())?;
 
-    let enclave = Enclave::<Vec<u8>>::try_from(self[..self.len() - 25].to_vec())?;
-
-    enclave.decrypt(key.pubk)
+    if let Some(key_metadata) = &enclave.key_metadata {
+      let key = Key::<KEY_SIZE, 16>::with_salt(
+        password.as_bytes(),
+        key_metadata.salt,
+        key_metadata.strategy.clone(),
+      );
+      enclave.decrypt(key.pubk)
+    } else {
+      Err(EnclaveError::Deserialization(
+        "No key metadata found".to_string(),
+      ))
+    }
   }
 
   /// Decrypts a slice of bytes using a provided key.
@@ -503,7 +602,7 @@ mod tests {
       let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
 
-      let safe = Enclave::from_plain_bytes(b"metadata".to_owned(), key, bytes);
+      let safe = Enclave::from_plain_bytes(b"metadata".to_owned(), key, bytes, None);
 
       assert!(safe.is_ok());
       assert_eq!(safe.unwrap().metadata, b"metadata".to_owned());
@@ -517,7 +616,7 @@ mod tests {
     fn it_should_decrypt_enclave() {
       let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key, bytes.clone(), None).unwrap();
 
       let decrypted_bytes = safe.decrypt(key);
 
@@ -529,7 +628,7 @@ mod tests {
     fn it_should_fail_with_wrong_key() {
       let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key, bytes.clone()).unwrap();
+      let safe = Enclave::from_plain_bytes(b"metadata".to_vec(), key, bytes.clone(), None).unwrap();
       let wrong_key = [1u8; KEY_SIZE];
 
       let decrypted_bytes = safe.decrypt(wrong_key);
@@ -541,7 +640,7 @@ mod tests {
     fn it_should_serialize_and_deserialize_to_bytes() {
       let key = [0u8; KEY_SIZE];
       let bytes = [0u8, 1u8, 2u8, 3u8, 4u8].to_vec();
-      let enclave = Enclave::from_plain_bytes([0_u8, 1_u8], key, bytes.clone()).unwrap();
+      let enclave = Enclave::from_plain_bytes([0_u8, 1_u8], key, bytes.clone(), None).unwrap();
 
       let serialized: Vec<u8> = enclave.clone().into();
       let deserialized = Enclave::try_from(serialized).unwrap();

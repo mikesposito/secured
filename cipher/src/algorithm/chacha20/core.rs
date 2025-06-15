@@ -31,6 +31,15 @@ pub const ROUNDS: usize = 10;
 /// The nonce is a 64-bit (8 bytes) value used to make each block unique.
 pub const CHACHA20_NONCE_SIZE: usize = 12;
 
+/// The ChaCha20 block size in bytes.
+/// This is calculated as the number of state words multiplied by the size of each word (4 bytes).
+pub const CHACHA20_BLOCK_SIZE: usize = STATE_WORDS * 4;
+
+/// The default amount of blocks to process in a sigle thread.
+/// This constant defines how many blocks of data will be processed in a single thread, if not
+/// specified otherwise.
+pub const DEFAULT_BLOCKS_PER_THREAD: usize = 100;
+
 /// The array of words representing a ChaCha20 block.
 pub type Block = [u32; STATE_WORDS];
 

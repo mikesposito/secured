@@ -4,11 +4,26 @@ pub mod chacha20;
 /// Module for the Poly1305 message authentication code (MAC) algorithm.
 pub mod poly1305;
 
+/// Module for the Blake3 message authentication code (MAC) algorithm.
+pub mod blake3;
+
+pub mod sha256;
+
+pub mod buffer;
+
 /// Re-exporting `ChaCha20` for direct use.
 pub use chacha20::ChaCha20;
 
 /// Re-exporting `Poly1305` for direct use.
 pub use poly1305::{Poly1305, SignedEnvelope};
+
+/// Re-exporting `Blake3Mac` for direct use.
+pub use blake3::Blake3Mac;
+
+/// Re-exporting `Sha256` for direct use.
+pub use sha256::Sha256;
+
+pub use buffer::Buffer;
 
 pub trait AlgorithmKeyIVInit {
   /// Initializes the algorithm with a key and an initialization vector (IV).
@@ -44,7 +59,7 @@ pub trait AlgorithmProcess {
   ///
   /// # Returns
   /// A vector of bytes representing the processed data.
-  fn process(&mut self, data: &[u8]) -> Vec<u8>;
+  fn process(&mut self, data: Vec<u8>) -> Vec<u8>;
 }
 
 pub trait AlgorithmProcessInPlace {
@@ -61,6 +76,11 @@ pub trait AlgorithmProcessInPlace {
   fn process_in_place(&self, data: &mut [u8]);
 }
 
-pub trait EncryptionAlgorithm: AlgorithmKeyIVInit + AlgorithmProcess {}
+pub trait AlgorithmCore: AlgorithmKeyIVInit + AlgorithmProcess + AlgorithmProcessInPlace {}
+
+pub trait EncryptionAlgorithm:
+  AlgorithmKeyIVInit + AlgorithmProcess + AlgorithmProcessInPlace
+{
+}
 
 pub trait AEADAlgorithm: AlgorithmKeyInit + AlgorithmProcess {}

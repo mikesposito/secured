@@ -35,14 +35,14 @@
 //! cipher.init(&key, &nonce);
 //!
 //! // Encrypt and decrypt
-//! let encrypted_data = cipher.encrypt(data);
-//! let decrypted_data = cipher.decrypt(&encrypted_data);
+//! let encrypted_data = cipher.encrypt(data.to_vec());
+//! let decrypted_data = cipher.decrypt(encrypted_data.clone());
 //!
 //! // Sign - the secret evelope contains the encrypted data and its MAC (message authentication code)
-//! let signed_secret_envelope = cipher.sign(b"your readable header", &encrypted_data);
+//! let signed_secret_envelope = cipher.sign(b"your readable header".to_vec(), encrypted_data);
 //!
 //! // Decrypt and verify - the verified decrypted data is returned if the MAC is valid
-//! let verified_decrypted_data = cipher.decrypt_and_verify(&signed_secret_envelope);
+//! let verified_decrypted_data = cipher.decrypt_and_verify(signed_secret_envelope);
 //!
 //! // if the MAC is invalid, the decryption will fail
 //! let is_decryption_ok = verified_decrypted_data.is_ok();
